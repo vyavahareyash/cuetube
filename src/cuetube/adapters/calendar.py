@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -15,6 +16,7 @@ from cuetube.domain.models import (
     EnergyLevel,
     ScheduledSlot,
     TimeWindow,
+    parse_blackout_windows,
 )
 
 logger = logging.getLogger(__name__)
@@ -144,6 +146,25 @@ class GoogleCalendarAdapter:
                 "or YOUTUBE_ prefix."
             )
 
+        if schedule_config is None:
+            raw_bo = os.getenv("CUETUBE_BLACKOUT_WINDOWS") or os.getenv("BLACKOUT_WINDOWS") or ""
+            blackouts = parse_blackout_windows(raw_bo) if raw_bo else ()
+            m_start = int(os.getenv("CUETUBE_MORNING_START", "9"))
+            m_end = int(os.getenv("CUETUBE_MORNING_END", "12"))
+            a_start = int(os.getenv("CUETUBE_AFTERNOON_START", "13"))
+            a_end = int(os.getenv("CUETUBE_AFTERNOON_END", "17"))
+            e_start = int(os.getenv("CUETUBE_EVENING_START", "17"))
+            e_end = int(os.getenv("CUETUBE_EVENING_END", "21"))
+            schedule_config = CircadianScheduleConfig(
+                morning_start_hour=m_start,
+                morning_end_hour=m_end,
+                afternoon_start_hour=a_start,
+                afternoon_end_hour=a_end,
+                evening_start_hour=e_start,
+                evening_end_hour=e_end,
+                blackout_windows=blackouts,
+            )
+
         return cls(
             credentials=creds,
             calendar_ids=calendar_ids,
@@ -239,13 +260,24 @@ class GoogleCalendarAdapter:
                 if b_end > b_start:
                     raw_busy.append((b_start, b_end))
 
-        merged_busy = merge_busy_intervals(raw_busy)
-
         # 2. Iterate each day across span and build candidate circadian windows
         cfg = self.schedule_config
         tz = start_dt.tzinfo
         cur_day = start_dt.date()
         last_day = end_dt.date()
+
+        # Inject manual blackout windows for all dates matching day_of_week
+        day_cursor = cur_day
+        while day_cursor <= last_day:
+            for blackout in cfg.blackout_windows:
+                if day_cursor.weekday() in blackout.days_of_week:
+                    bo_start = datetime.combine(day_cursor, blackout.start_time, tzinfo=tz)
+                    bo_end = datetime.combine(day_cursor, blackout.end_time, tzinfo=tz)
+                    if bo_end > bo_start:
+                        raw_busy.append((bo_start, bo_end))
+            day_cursor += timedelta(days=1)
+
+        merged_busy = merge_busy_intervals(raw_busy)
 
         day_windows: list[tuple[datetime, datetime, EnergyLevel]] = []
 

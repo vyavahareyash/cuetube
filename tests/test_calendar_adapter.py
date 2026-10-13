@@ -4,7 +4,7 @@ import json
 import unittest
 import urllib.error
 import urllib.request
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
 from cuetube.adapters.calendar import (
@@ -16,6 +16,8 @@ from cuetube.adapters.calendar import (
 )
 from cuetube.adapters.youtube import OAuthCredentials
 from cuetube.domain.models import (
+    BlackoutWindow,
+    CircadianScheduleConfig,
     EnergyLevel,
     ScheduledSlot,
     TimeWindow,
@@ -356,6 +358,109 @@ class TestGoogleCalendarAdapter(unittest.TestCase):
             adapter_server_err.query_availability(
                 self.base_day.replace(hour=8),
                 self.base_day.replace(hour=18),
+            )
+
+    def test_query_availability_with_non_continuous_blackout_patches(self) -> None:
+        def mock_transport(req: urllib.request.Request) -> dict[str, Any]:
+            # No calendar meetings; busy list is empty
+            return {"calendars": {"primary": {"busy": []}}}
+
+        schedule_cfg = CircadianScheduleConfig(
+            blackout_windows=(
+                BlackoutWindow(start_time=time(10, 0), end_time=time(11, 0)),
+                BlackoutWindow(start_time=time(14, 30), end_time=time(16, 0)),
+            )
+        )
+
+        adapter = GoogleCalendarAdapter(
+            credentials=self.creds,
+            schedule_config=schedule_cfg,
+            http_transport=mock_transport,
+        )
+
+        windows = adapter.query_availability(
+            self.base_day.replace(hour=8),
+            self.base_day.replace(hour=22),
+        )
+
+        # Morning Focus (09:00 - 12:00) with 10:00 - 11:00 blackout splits into:
+        # 1. 09:00 - 10:00 (MORNING_FOCUS)
+        # 2. 11:00 - 12:00 (MORNING_FOCUS)
+        # Afternoon Maintenance (13:00 - 17:00) with 14:30 - 16:00 blackout splits into:
+        # 3. 13:00 - 14:30 (AFTERNOON_MAINTENANCE)
+        # 4. 16:00 - 17:00 (AFTERNOON_MAINTENANCE)
+        # Evening Unwind (17:00 - 21:00) untouched:
+        # 5. 17:00 - 21:00 (EVENING_UNWIND)
+        self.assertEqual(len(windows), 5)
+
+        # Verify no window intersects 10:00-11:00 or 14:30-16:00
+        for w in windows:
+            # Not in 10:00-11:00
+            self.assertFalse(
+                w.start_time < self.base_day.replace(hour=11)
+                and w.end_time > self.base_day.replace(hour=10)
+            )
+            # Not in 14:30-16:00
+            self.assertFalse(
+                w.start_time < self.base_day.replace(hour=16)
+                and w.end_time > self.base_day.replace(hour=14, minute=30)
+            )
+
+    def test_query_availability_blackout_weekday_filter(self) -> None:
+        def mock_transport(req: urllib.request.Request) -> dict[str, Any]:
+            return {"calendars": {"primary": {"busy": []}}}
+
+        # 2026-10-14 is Wednesday (weekday = 2)
+        self.assertEqual(self.base_day.weekday(), 2)
+
+        # Blackout configured for weekends only (5=Sat, 6=Sun)
+        schedule_cfg = CircadianScheduleConfig(
+            blackout_windows=(
+                BlackoutWindow(
+                    start_time=time(10, 0),
+                    end_time=time(12, 0),
+                    days_of_week=(5, 6),
+                ),
+            )
+        )
+
+        adapter = GoogleCalendarAdapter(
+            credentials=self.creds,
+            schedule_config=schedule_cfg,
+            http_transport=mock_transport,
+        )
+
+        windows = adapter.query_availability(
+            self.base_day.replace(hour=8),
+            self.base_day.replace(hour=22),
+        )
+
+        # On Wednesday, the weekend blackout does NOT apply -> full 09:00 - 12:00 intact
+        morning_wins = [w for w in windows if w.energy_level == EnergyLevel.MORNING_FOCUS]
+        self.assertEqual(len(morning_wins), 1)
+        self.assertEqual(morning_wins[0].start_time, self.base_day.replace(hour=9))
+        self.assertEqual(morning_wins[0].end_time, self.base_day.replace(hour=12))
+
+    def test_from_env_loads_blackout_windows_and_custom_hours(self) -> None:
+        import os
+        from unittest.mock import patch
+
+        env_vars = {
+            "CALENDAR_CLIENT_ID": "cid",
+            "CALENDAR_CLIENT_SECRET": "csec",
+            "CALENDAR_REFRESH_TOKEN": "rtok",
+            "CUETUBE_BLACKOUT_WINDOWS": "10:00-11:00,15:00-16:00",
+            "CUETUBE_MORNING_START": "7",
+            "CUETUBE_EVENING_END": "24",
+        }
+        with patch.dict(os.environ, env_vars, clear=False):
+            adapter = GoogleCalendarAdapter.from_env()
+            self.assertEqual(adapter.schedule_config.morning_start_hour, 7)
+            self.assertEqual(adapter.schedule_config.evening_end_hour, 24)
+            self.assertEqual(len(adapter.schedule_config.blackout_windows), 2)
+            self.assertEqual(
+                adapter.schedule_config.blackout_windows[0].start_time,
+                time(10, 0),
             )
 
 
