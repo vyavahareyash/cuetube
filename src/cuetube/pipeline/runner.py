@@ -1,7 +1,7 @@
 """Pipeline runner and chronobiological schedule planner."""
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -12,6 +12,7 @@ from cuetube.adapters.memory import (
     InMemoryPlaylistTarget,
     InMemoryTranscriptProvider,
 )
+from cuetube.adapters.transcript import hydrate_video_item
 from cuetube.domain.models import (
     CognitiveDemand,
     EnergyLevel,
@@ -44,6 +45,7 @@ class PipelineConfig:
     inbox_playlist_name: str = "Queue-Inbox"
     planning_start: datetime | None = None
     planning_end: datetime | None = None
+    hydrate_metadata: bool = True
 
     @classmethod
     def create_mock_default(
@@ -202,9 +204,20 @@ def run_pipeline(cfg: PipelineConfig) -> PipelineSummary:
 
     # 2. Extraction & Classification
     triaged_videos: list[TriagedVideo] = []
+    transport = getattr(cfg.transcript_provider, "http_transport", None)
     for item in pending_videos:
         try:
-            transcript = cfg.transcript_provider.extract_transcript(item.video_id)
+            if cfg.hydrate_metadata:
+                item = hydrate_video_item(item, http_transport=transport)
+
+            transcript = cfg.transcript_provider.extract_transcript(
+                item.video_id,
+                title=item.title,
+                description=item.description,
+                duration_seconds=item.duration_seconds,
+            )
+            if not item.chapters and transcript and transcript.chapters:
+                item = replace(item, chapters=transcript.chapters)
             triage = cfg.classifier.classify_video(item, transcript)
             triaged_videos.append(TriagedVideo(item=item, triage=triage, transcript=transcript))
         except Exception as exc:

@@ -5,11 +5,14 @@ from dataclasses import FrozenInstanceError
 from datetime import datetime, timedelta
 
 from cuetube.domain.models import (
+    ChapterMarker,
     CognitiveDemand,
     EnergyLevel,
     EngagementMode,
     ScheduledSlot,
     TimeWindow,
+    Transcript,
+    TranscriptSegment,
     TriagedVideo,
     TriageMetadata,
     VideoItem,
@@ -129,6 +132,44 @@ class TestDomainModels(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             TriagedVideo(item=item, triage=triage_mismatch)
+
+    def test_chapter_marker_validation(self) -> None:
+        marker = ChapterMarker(title="Introduction", start_seconds=0, end_seconds=120)
+        self.assertEqual(marker.title, "Introduction")
+        self.assertEqual(marker.start_seconds, 0)
+        self.assertEqual(marker.end_seconds, 120)
+
+        # Empty title -> ValueError
+        with self.assertRaises(ValueError):
+            ChapterMarker(title="", start_seconds=0)
+
+        # Negative start_seconds -> ValueError
+        with self.assertRaises(ValueError):
+            ChapterMarker(title="Intro", start_seconds=-1)
+
+        # end_seconds < start_seconds -> ValueError
+        with self.assertRaises(ValueError):
+            ChapterMarker(title="Intro", start_seconds=100, end_seconds=50)
+
+    def test_transcript_model_with_chapters_and_generation_flag(self) -> None:
+        chapter = ChapterMarker(title="Intro", start_seconds=0, end_seconds=60)
+        seg = TranscriptSegment(start_seconds=0.0, duration_seconds=5.0, text="Hello")
+        transcript = Transcript(
+            video_id="v-1",
+            text="Hello world",
+            segments=(seg,),
+            is_sampled=True,
+            is_fallback=False,
+            is_generated=True,
+            language="en-US",
+            chapters=(chapter,),
+        )
+        self.assertEqual(transcript.video_id, "v-1")
+        self.assertTrue(transcript.is_sampled)
+        self.assertTrue(transcript.is_generated)
+        self.assertEqual(transcript.language, "en-US")
+        self.assertEqual(len(transcript.chapters), 1)
+        self.assertEqual(transcript.chapters[0].title, "Intro")
 
 
 if __name__ == "__main__":

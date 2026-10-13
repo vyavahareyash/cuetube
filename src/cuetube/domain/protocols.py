@@ -21,7 +21,13 @@ class IngestionSource(Protocol):
 class TranscriptProvider(Protocol):
     """Seam for extracting video subtitles and chapters."""
 
-    def extract_transcript(self, video_id: str) -> Transcript | None: ...
+    def extract_transcript(
+        self,
+        video_id: str,
+        title: str = "",
+        description: str = "",
+        duration_seconds: int | None = None,
+    ) -> Transcript | None: ...
 
 
 class LlmClassifier(Protocol):

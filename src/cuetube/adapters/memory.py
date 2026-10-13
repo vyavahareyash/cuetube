@@ -36,13 +36,25 @@ class InMemoryTranscriptProvider:
         self.transcripts: dict[str, Transcript] = dict(transcripts or {})
         self.default_fallback = default_fallback
 
-    def extract_transcript(self, video_id: str) -> Transcript | None:
+    def extract_transcript(
+        self,
+        video_id: str,
+        title: str = "",
+        description: str = "",
+        duration_seconds: int | None = None,
+    ) -> Transcript | None:
         if video_id in self.transcripts:
             return self.transcripts[video_id]
         if self.default_fallback:
+            lines: list[str] = []
+            if title and title.strip():
+                lines.append(f"Title: {title.strip()}")
+            if description and description.strip():
+                lines.append(f"Description:\n{description.strip()}")
+            fallback_text = "\n\n".join(lines) if lines else ""
             return Transcript(
                 video_id=video_id,
-                text="",
+                text=fallback_text,
                 segments=(),
                 is_sampled=False,
                 is_fallback=True,
