@@ -21,7 +21,7 @@
 - **Interface**: `classify_video(item: VideoItem, transcript: Transcript | None) -> TriageMetadata`
 - **Depth**: Hides prompt templating, token window limits, structured schema enforcement, and retry strategies.
 - **Seams**: `LlmClient` protocol.
-- **Adapters**: `GeminiClient`, `MockClassifier`.
+- **Adapters**: `OpenRouterClassifierAdapter` (`GeminiClassifierAdapter` alias), `InMemoryLlmClassifier`.
 
 ## 5. `scheduling`
 - **Interface**: `plan_schedule(items: list[TriagedVideo], calendar: CalendarTarget, rules: ScheduleRules) -> SchedulePlan`

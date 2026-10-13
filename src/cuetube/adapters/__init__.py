@@ -7,6 +7,15 @@ from .memory import (
     InMemoryPlaylistTarget,
     InMemoryTranscriptProvider,
 )
+from .openrouter import (
+    ClassificationError,
+    ClassificationSchemaError,
+    OpenRouterApiError,
+    OpenRouterAuthError,
+    OpenRouterClassifierAdapter,
+    OpenRouterConfig,
+    OpenRouterRateLimitError,
+)
 from .takeout import TakeoutArchiveAdapter, TakeoutCsvSource
 from .transcript import (
     OfficialTranscriptAdapter,
@@ -30,8 +39,14 @@ from .youtube import (
     parse_iso8601_duration,
 )
 
+# Architectural alias
+GeminiClassifierAdapter = OpenRouterClassifierAdapter
+
 __all__ = [
+    "ClassificationError",
+    "ClassificationSchemaError",
     "CustomPlaylistAdapter",
+    "GeminiClassifierAdapter",
     "InMemoryCalendarTarget",
     "InMemoryIngestionSource",
     "InMemoryLlmClassifier",
@@ -39,6 +54,11 @@ __all__ = [
     "InMemoryTranscriptProvider",
     "OAuthCredentials",
     "OfficialTranscriptAdapter",
+    "OpenRouterApiError",
+    "OpenRouterAuthError",
+    "OpenRouterClassifierAdapter",
+    "OpenRouterConfig",
+    "OpenRouterRateLimitError",
     "TakeoutArchiveAdapter",
     "TakeoutCsvSource",
     "YouTubeApiError",

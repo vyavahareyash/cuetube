@@ -15,6 +15,9 @@ source .venv/bin/activate
 
 # Install dependencies in editable mode with dev tools
 uv pip install -e ".[dev]"
+
+# Copy environment template and add credentials
+cp .env.example .env
 ```
 
 ### 2. Run Tests

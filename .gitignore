@@ -8,6 +8,7 @@ build/
 .coverage
 .env
 .env.*
+!.env.example
 credentials/
 client_secret*.json
 *.secret.json

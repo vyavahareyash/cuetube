@@ -1,0 +1,3 @@
+# OpenRouter Schema-Enforced Video Classification
+
+Video triage requires evaluating textual signals (metadata, chapter markers, transcripts) into structured domain contracts (`TriageMetadata`) across cognitive demand and engagement dimensions. We standardize on OpenRouter as the primary inference seam adapter (`OpenRouterClassifierAdapter`), using standard library HTTP transport (`urllib.request`) with dependency-injectable transports to maintain zero external runtime dependencies. The adapter enforces a strict JSON schema contract, handles rate limits (HTTP 429) and transient server errors via exponential backoff and `Retry-After` headers, and supports transparent metadata fallbacks when subtitles are absent.
