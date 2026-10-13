@@ -9,9 +9,10 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any
 
-from cuetube.domain.models import ChapterMarker, Transcript, TranscriptSegment
+from cuetube.domain.models import ChapterMarker, Transcript, TranscriptSegment, VideoItem
 
 logger = logging.getLogger(__name__)
 
@@ -460,3 +461,58 @@ class YouTubeTranscriptProvider:
 
 # Alias per architecture documentation
 OfficialTranscriptAdapter = YouTubeTranscriptProvider
+
+
+def fetch_video_oembed(
+    video_id: str,
+    http_transport: Callable[[urllib.request.Request], Any] | None = None,
+) -> dict[str, str]:
+    """Fetch keyless public video metadata (title, author/channel) via YouTube oEmbed."""
+    url = (
+        f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+    )
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+
+    try:
+        if http_transport:
+            resp_data = http_transport(req)
+            if isinstance(resp_data, (str, bytes)):
+                data = json.loads(resp_data)
+            elif isinstance(resp_data, dict):
+                data = resp_data
+            else:
+                data = {}
+        else:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+        return {
+            "title": data.get("title", ""),
+            "channel": data.get("author_name", ""),
+        }
+    except Exception as exc:
+        logger.debug("oEmbed lookup failed for %s: %s", video_id, exc)
+        return {}
+
+
+def hydrate_video_item(
+    item: VideoItem,
+    http_transport: Callable[[urllib.request.Request], Any] | None = None,
+) -> VideoItem:
+    """Hydrate missing/placeholder title and channel via zero-auth YouTube oEmbed."""
+    needs_title = not item.title or item.title.startswith("YouTube Video ")
+    needs_channel = not item.channel or item.channel == "Unknown"
+
+    if not (needs_title or needs_channel):
+        return item
+
+    meta = fetch_video_oembed(item.video_id, http_transport=http_transport)
+    updates: dict[str, Any] = {}
+    if needs_title and meta.get("title"):
+        updates["title"] = meta["title"]
+    if needs_channel and meta.get("channel"):
+        updates["channel"] = meta["channel"]
+
+    if updates:
+        return replace(item, **updates)
+    return item

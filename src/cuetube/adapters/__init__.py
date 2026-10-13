@@ -11,6 +11,8 @@ from .takeout import TakeoutArchiveAdapter, TakeoutCsvSource
 from .transcript import (
     OfficialTranscriptAdapter,
     YouTubeTranscriptProvider,
+    fetch_video_oembed,
+    hydrate_video_item,
     parse_chapter_markers,
     parse_timed_text,
     resolve_caption_track,
@@ -46,6 +48,8 @@ __all__ = [
     "YouTubePlaylistTarget",
     "YouTubeQuotaExceededError",
     "YouTubeTranscriptProvider",
+    "fetch_video_oembed",
+    "hydrate_video_item",
     "parse_chapter_markers",
     "parse_iso8601_duration",
     "parse_timed_text",

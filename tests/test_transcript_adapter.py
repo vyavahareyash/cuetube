@@ -8,12 +8,14 @@ import urllib.request
 from cuetube.adapters.transcript import (
     OfficialTranscriptAdapter,
     YouTubeTranscriptProvider,
+    fetch_video_oembed,
+    hydrate_video_item,
     parse_chapter_markers,
     parse_timed_text,
     resolve_caption_track,
     sample_transcript,
 )
-from cuetube.domain.models import ChapterMarker, TranscriptSegment
+from cuetube.domain.models import ChapterMarker, TranscriptSegment, VideoItem
 
 
 class TestTranscriptAdapter(unittest.TestCase):
@@ -352,6 +354,62 @@ class TestTranscriptAdapter(unittest.TestCase):
 
     def test_official_transcript_adapter_alias(self) -> None:
         self.assertIs(OfficialTranscriptAdapter, YouTubeTranscriptProvider)
+
+    def test_fetch_video_oembed_success(self) -> None:
+        def mock_oembed_transport(req: urllib.request.Request) -> dict:
+            self.assertIn("oembed", req.full_url)
+            self.assertIn("vid-oembed", req.full_url)
+            return {
+                "title": "Real YouTube Lecture Title",
+                "author_name": "CS Department",
+            }
+
+        meta = fetch_video_oembed("vid-oembed", http_transport=mock_oembed_transport)
+        self.assertEqual(meta["title"], "Real YouTube Lecture Title")
+        self.assertEqual(meta["channel"], "CS Department")
+
+    def test_hydrate_video_item_placeholder_title_and_channel(self) -> None:
+        def mock_oembed_transport(req: urllib.request.Request) -> dict:
+            return {
+                "title": "Clean Architecture Explained",
+                "author_name": "Software Engineering Channel",
+            }
+
+        # Item with Takeout CSV placeholder title and channel
+        item = VideoItem(
+            video_id="v-takeout-1",
+            title="YouTube Video v-takeout-1",
+            channel="Unknown",
+            duration_seconds=600,
+            published_at="2026-01-01T00:00:00Z",
+            url="https://youtube.com/watch?v=v-takeout-1",
+        )
+
+        hydrated = hydrate_video_item(item, http_transport=mock_oembed_transport)
+        self.assertEqual(hydrated.title, "Clean Architecture Explained")
+        self.assertEqual(hydrated.channel, "Software Engineering Channel")
+
+    def test_hydrate_video_item_skips_when_metadata_already_present(self) -> None:
+        calls = []
+
+        def mock_transport(req: urllib.request.Request) -> dict:
+            calls.append(req.full_url)
+            return {}
+
+        # Item that already has rich title and channel
+        item = VideoItem(
+            video_id="v-rich",
+            title="Already Rich Title",
+            channel="Rich Channel",
+            duration_seconds=300,
+            published_at="2026-01-01T00:00:00Z",
+            url="https://youtube.com/watch?v=v-rich",
+        )
+
+        hydrated = hydrate_video_item(item, http_transport=mock_transport)
+        self.assertEqual(len(calls), 0)  # No network call made!
+        self.assertEqual(hydrated.title, "Already Rich Title")
+        self.assertEqual(hydrated.channel, "Rich Channel")
 
 
 if __name__ == "__main__":

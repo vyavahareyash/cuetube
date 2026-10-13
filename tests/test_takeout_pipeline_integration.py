@@ -118,6 +118,46 @@ gb4EQQOsgQc,2023-04-21T18:42:15+00:00
         self.assertEqual(summary.total_relocated, 2)
         self.assertEqual(len(summary.errors), 0)
 
+    def test_pipeline_runner_hydrates_takeout_csv_metadata_via_oembed(self) -> None:
+        raw_csv = """Video ID,Playlist Video Creation Timestamp
+RPGpA5OLt7M,2023-04-12T05:32:10+00:00
+"""
+        takeout_source = TakeoutCsvSource(raw_csv)
+
+        def mock_oembed_transport(req):
+            if "oembed" in req.full_url:
+                return {
+                    "title": "Learn Go in 100 Seconds",
+                    "author_name": "Fireship",
+                }
+            return {}
+
+        from cuetube.adapters.transcript import YouTubeTranscriptProvider
+
+        transcripts = YouTubeTranscriptProvider(http_transport=mock_oembed_transport)
+        calendar = InMemoryCalendarTarget(self.windows[:2])
+        playlist = InMemoryPlaylistTarget({"Queue-Inbox": set()})
+
+        cfg = PipelineConfig(
+            ingestion_source=takeout_source,
+            transcript_provider=transcripts,
+            classifier=InMemoryLlmClassifier(),
+            calendar_target=calendar,
+            playlist_target=playlist,
+            buffer_minutes=15,
+            planning_start=self.now,
+            planning_end=self.now + timedelta(days=2),
+            hydrate_metadata=True,
+        )
+
+        summary = run_pipeline(cfg)
+        self.assertEqual(summary.total_ingested, 1)
+        self.assertEqual(summary.total_scheduled, 1)
+
+        # Assert calendar slot has the hydrated real title!
+        event = calendar.inserted_events[0]
+        self.assertEqual(event.title, "Learn Go in 100 Seconds")
+
 
 if __name__ == "__main__":
     unittest.main()

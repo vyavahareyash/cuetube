@@ -12,6 +12,7 @@ from cuetube.adapters.memory import (
     InMemoryPlaylistTarget,
     InMemoryTranscriptProvider,
 )
+from cuetube.adapters.transcript import hydrate_video_item
 from cuetube.domain.models import (
     CognitiveDemand,
     EnergyLevel,
@@ -44,6 +45,7 @@ class PipelineConfig:
     inbox_playlist_name: str = "Queue-Inbox"
     planning_start: datetime | None = None
     planning_end: datetime | None = None
+    hydrate_metadata: bool = True
 
     @classmethod
     def create_mock_default(
@@ -202,8 +204,12 @@ def run_pipeline(cfg: PipelineConfig) -> PipelineSummary:
 
     # 2. Extraction & Classification
     triaged_videos: list[TriagedVideo] = []
+    transport = getattr(cfg.transcript_provider, "http_transport", None)
     for item in pending_videos:
         try:
+            if cfg.hydrate_metadata:
+                item = hydrate_video_item(item, http_transport=transport)
+
             transcript = cfg.transcript_provider.extract_transcript(
                 item.video_id,
                 title=item.title,
