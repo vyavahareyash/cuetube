@@ -62,12 +62,19 @@ def update_env_file(env_path: Path, updates: dict[str, str]) -> None:
         f.writelines(new_lines)
 
 
+DEFAULT_SCOPES = [
+    "https://www.googleapis.com/auth/youtube",
+    "https://www.googleapis.com/auth/calendar",
+]
+
+
 def get_tokens(
     client_id: str,
     client_secret: str,
     redirect_uri: str = "https://oauth.pstmn.io/v1/browser-callback",
+    scopes: list[str] | None = None,
 ) -> None:
-    scope = "https://www.googleapis.com/auth/youtube"
+    scope = " ".join(scopes or DEFAULT_SCOPES)
 
     # Step 1: Authorization URL
     auth_params = {
@@ -117,9 +124,12 @@ def get_tokens(
             updates = {
                 "YOUTUBE_CLIENT_ID": client_id,
                 "YOUTUBE_CLIENT_SECRET": client_secret,
+                "GOOGLE_CLIENT_ID": client_id,
+                "GOOGLE_CLIENT_SECRET": client_secret,
             }
             if refresh_token:
                 updates["YOUTUBE_REFRESH_TOKEN"] = refresh_token
+                updates["GOOGLE_REFRESH_TOKEN"] = refresh_token
 
             env_file = Path(".env")
             update_env_file(env_file, updates)

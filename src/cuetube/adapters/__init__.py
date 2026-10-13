@@ -1,5 +1,10 @@
 """Adapters satisfying domain protocols."""
 
+from .calendar import (
+    CalendarApiError,
+    CalendarAuthError,
+    GoogleCalendarAdapter,
+)
 from .memory import (
     InMemoryCalendarTarget,
     InMemoryIngestionSource,
@@ -39,14 +44,19 @@ from .youtube import (
     parse_iso8601_duration,
 )
 
-# Architectural alias
+# Architectural aliases
 GeminiClassifierAdapter = OpenRouterClassifierAdapter
+GCalAdapter = GoogleCalendarAdapter
 
 __all__ = [
+    "CalendarApiError",
+    "CalendarAuthError",
     "ClassificationError",
     "ClassificationSchemaError",
     "CustomPlaylistAdapter",
+    "GCalAdapter",
     "GeminiClassifierAdapter",
+    "GoogleCalendarAdapter",
     "InMemoryCalendarTarget",
     "InMemoryIngestionSource",
     "InMemoryLlmClassifier",

@@ -1,7 +1,7 @@
 """Immutable domain models with strict validation."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, time
 from enum import StrEnum
 from typing import Any
 
@@ -180,6 +180,81 @@ class SchedulePlan:
 
     slots: tuple[ScheduledSlot, ...] = field(default_factory=tuple)
     unassigned_videos: tuple[TriagedVideo, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class BlackoutWindow:
+    """Manual recurring time-of-day blackout window where scheduling is prohibited."""
+
+    start_time: time
+    end_time: time
+    days_of_week: tuple[int, ...] = (0, 1, 2, 3, 4, 5, 6)  # 0=Mon .. 6=Sun
+
+    def __post_init__(self) -> None:
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time must be strictly after start_time")
+        for d in self.days_of_week:
+            if not (0 <= d <= 6):
+                raise ValueError("days_of_week entries must be integers within 0..6 (Mon..Sun)")
+
+    @classmethod
+    def from_string(
+        cls,
+        raw: str,
+        days_of_week: tuple[int, ...] = (0, 1, 2, 3, 4, 5, 6),
+    ) -> "BlackoutWindow":
+        """Parse 'HH:MM-HH:MM' string into BlackoutWindow."""
+        parts = raw.strip().split("-")
+        if len(parts) != 2:
+            raise ValueError(f"Invalid blackout window format '{raw}', expected 'HH:MM-HH:MM'")
+        start_parts = [int(p) for p in parts[0].strip().split(":")]
+        end_parts = [int(p) for p in parts[1].strip().split(":")]
+        start_t = time(start_parts[0], start_parts[1] if len(start_parts) > 1 else 0)
+        end_t = time(end_parts[0], end_parts[1] if len(end_parts) > 1 else 0)
+        return cls(start_time=start_t, end_time=end_t, days_of_week=days_of_week)
+
+
+def parse_blackout_windows(raw_str: str) -> tuple[BlackoutWindow, ...]:
+    """Parse comma-separated blackout intervals (e.g. '10:00-12:00,14:00-16:30')."""
+    if not raw_str or not raw_str.strip():
+        return ()
+    windows: list[BlackoutWindow] = []
+    for item in raw_str.split(","):
+        cleaned = item.strip()
+        if cleaned:
+            windows.append(BlackoutWindow.from_string(cleaned))
+    return tuple(windows)
+
+
+@dataclass(frozen=True)
+class CircadianScheduleConfig:
+    """Configurable daily circadian energy window bounds and manual blackouts."""
+
+    morning_start_hour: int = 9
+    morning_end_hour: int = 12
+    afternoon_start_hour: int = 13
+    afternoon_end_hour: int = 17
+    evening_start_hour: int = 17
+    evening_end_hour: int = 21
+    min_slot_duration_minutes: int = 15
+    blackout_windows: tuple[BlackoutWindow, ...] = field(default_factory=tuple)
+
+    def __post_init__(self) -> None:
+        if not (0 <= self.morning_start_hour < self.morning_end_hour <= 24):
+            raise ValueError(
+                "morning_start_hour must be strictly less than morning_end_hour and within 0..24"
+            )
+        if not (0 <= self.afternoon_start_hour < self.afternoon_end_hour <= 24):
+            raise ValueError(
+                "afternoon_start_hour must be strictly less than afternoon_end_hour "
+                "and within 0..24"
+            )
+        if not (0 <= self.evening_start_hour < self.evening_end_hour <= 24):
+            raise ValueError(
+                "evening_start_hour must be strictly less than evening_end_hour and within 0..24"
+            )
+        if self.min_slot_duration_minutes <= 0:
+            raise ValueError("min_slot_duration_minutes must be greater than zero")
 
 
 @dataclass(frozen=True)

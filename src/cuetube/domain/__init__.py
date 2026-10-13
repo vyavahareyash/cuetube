@@ -1,7 +1,9 @@
 """Domain entities and protocol contracts for CueTube."""
 
 from .models import (
+    BlackoutWindow,
     ChapterMarker,
+    CircadianScheduleConfig,
     CognitiveDemand,
     EnergyLevel,
     EngagementMode,
@@ -14,6 +16,7 @@ from .models import (
     TriagedVideo,
     TriageMetadata,
     VideoItem,
+    parse_blackout_windows,
 )
 from .protocols import (
     CalendarTarget,
@@ -24,7 +27,9 @@ from .protocols import (
 )
 
 __all__ = [
+    "BlackoutWindow",
     "ChapterMarker",
+    "CircadianScheduleConfig",
     "CognitiveDemand",
     "EnergyLevel",
     "EngagementMode",
@@ -42,4 +47,5 @@ __all__ = [
     "LlmClassifier",
     "PlaylistTarget",
     "TranscriptProvider",
+    "parse_blackout_windows",
 ]

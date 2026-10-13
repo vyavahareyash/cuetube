@@ -2,10 +2,12 @@
 
 import unittest
 from dataclasses import FrozenInstanceError
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from cuetube.domain.models import (
+    BlackoutWindow,
     ChapterMarker,
+    CircadianScheduleConfig,
     CognitiveDemand,
     EnergyLevel,
     EngagementMode,
@@ -16,6 +18,7 @@ from cuetube.domain.models import (
     TriagedVideo,
     TriageMetadata,
     VideoItem,
+    parse_blackout_windows,
 )
 
 
@@ -169,7 +172,62 @@ class TestDomainModels(unittest.TestCase):
         self.assertTrue(transcript.is_generated)
         self.assertEqual(transcript.language, "en-US")
         self.assertEqual(len(transcript.chapters), 1)
-        self.assertEqual(transcript.chapters[0].title, "Intro")
+
+    def test_circadian_schedule_config_validation(self) -> None:
+        cfg = CircadianScheduleConfig()
+        self.assertEqual(cfg.morning_start_hour, 9)
+        self.assertEqual(cfg.morning_end_hour, 12)
+        self.assertEqual(cfg.afternoon_start_hour, 13)
+        self.assertEqual(cfg.afternoon_end_hour, 17)
+        self.assertEqual(cfg.evening_start_hour, 17)
+        self.assertEqual(cfg.evening_end_hour, 21)
+        self.assertEqual(cfg.min_slot_duration_minutes, 15)
+
+        # Invalid hour order -> ValueError
+        with self.assertRaises(ValueError):
+            CircadianScheduleConfig(morning_start_hour=12, morning_end_hour=9)
+
+        # Invalid hour out of bounds -> ValueError
+        with self.assertRaises(ValueError):
+            CircadianScheduleConfig(morning_start_hour=-1)
+
+        # Invalid min slot duration -> ValueError
+        with self.assertRaises(ValueError):
+            CircadianScheduleConfig(min_slot_duration_minutes=0)
+
+    def test_blackout_window_validation_and_parsing(self) -> None:
+        bw = BlackoutWindow(start_time=time(10, 0), end_time=time(12, 0))
+        self.assertEqual(bw.start_time, time(10, 0))
+        self.assertEqual(bw.end_time, time(12, 0))
+        self.assertEqual(bw.days_of_week, (0, 1, 2, 3, 4, 5, 6))
+
+        # End time before start time -> ValueError
+        with self.assertRaises(ValueError):
+            BlackoutWindow(start_time=time(12, 0), end_time=time(10, 0))
+
+        # Invalid day of week -> ValueError
+        with self.assertRaises(ValueError):
+            BlackoutWindow(
+                start_time=time(10, 0),
+                end_time=time(12, 0),
+                days_of_week=(0, 7),
+            )
+
+        # Parse from string
+        parsed = BlackoutWindow.from_string("14:30-16:00")
+        self.assertEqual(parsed.start_time, time(14, 30))
+        self.assertEqual(parsed.end_time, time(16, 0))
+
+        # Parse multiple comma-separated windows
+        windows = parse_blackout_windows("10:00-12:00, 14:00-16:30")
+        self.assertEqual(len(windows), 2)
+        self.assertEqual(windows[0].start_time, time(10, 0))
+        self.assertEqual(windows[0].end_time, time(12, 0))
+        self.assertEqual(windows[1].start_time, time(14, 0))
+        self.assertEqual(windows[1].end_time, time(16, 30))
+
+        # Empty string
+        self.assertEqual(parse_blackout_windows(""), ())
 
 
 if __name__ == "__main__":
