@@ -34,3 +34,13 @@
 | `classification` | Inference Engine | Gemini API (`GeminiClassifierAdapter`), Rule-based Mock |
 | `scheduling` | Calendar Target | Google Calendar API (`GCalAdapter`), iCal Export (`ICalFileAdapter`) |
 | `pipeline` | Orchestration | CLI Runner, Scheduled Cron / Worker |
+
+## Product & Delivery Roadmap
+
+1. **Phase 1: PyPI Reusable Library & CLI (Build Phase)**:
+   - Package core domain and pipeline harness into an installable library distributed on PyPI as `cuetube` (`pip install cuetube`).
+   - Deliver companion CLI for local execution, scheduled background runs, and developer pipelines.
+2. **Phase 2: Full-Fledged Web & Mobile Application (Post-Build Phase)**:
+   - Backend service layer wrapping the CueTube library.
+   - Centralized OAuth 2.0 flow removing personal Google Cloud Console and API key requirements for end users.
+   - Dedicated cross-platform web and mobile frontends for interactive queue selection, visual calendar dashboards, and automated backlog processing.

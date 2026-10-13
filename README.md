@@ -46,6 +46,20 @@ print('Pipeline Summary:', summary)
 "
 ```
 
+## Product Roadmap & Vision
+
+CueTube follows a two-phased delivery strategy:
+
+1. **Phase 1: PyPI Reusable Library & CLI (Current Build Phase)**:
+   - Designed as a modular, decoupled Python library with zero external runtime dependencies.
+   - Strict domain invariants and deep protocol seams (`IngestionSource`, `PlaylistTarget`, `LlmClassifier`, `CalendarTarget`).
+   - Packaged and published on **PyPI** (`pip install cuetube`) with a companion CLI for headless automation, scripts, and scheduled cron workers.
+
+2. **Phase 2: Full-Fledged Web & Mobile Application (Post-Build Phase)**:
+   - Development of consumer-facing web and mobile applications built on top of the CueTube core engine.
+   - **Frictionless Onboarding**: Centralized "Sign in with Google" integration eliminating individual Google Cloud Console, OAuth credential, or API key configuration for end users.
+   - Interactive queue selection, energy-schedule dashboards, and real-time viewing notifications.
+
 ## Documentation Index
 - [Developer Guide](file:///Users/yash/Documents/Repos/cuetube/docs/DEVELOPMENT.md): Detailed environment setup, execution examples, and developer guidelines.
 - [Architecture](file:///Users/yash/Documents/Repos/cuetube/docs/ARCHITECTURE.md): System decomposition, deep modules, seams, and adapters.
@@ -53,5 +67,6 @@ print('Pipeline Summary:', summary)
 - [Glossary](file:///Users/yash/Documents/Repos/cuetube/docs/GLOSSARY.md): Shared domain vocabulary and architectural terminology.
 - [Background Research](file:///Users/yash/Documents/Repos/cuetube/docs/RESEARCH.md): YouTube API constraints, ingestion mechanics, and runtime trade-offs.
 - [Architecture Decision Records (ADRs)](file:///Users/yash/Documents/Repos/cuetube/docs/adr): Key architectural choices and trade-offs.
+
 
 
