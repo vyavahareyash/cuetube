@@ -29,6 +29,39 @@ def load_credentials_from_json(json_path: Path) -> tuple[str, str, str]:
     return client_id, client_secret, redirect_uri
 
 
+def update_env_file(env_path: Path, updates: dict[str, str]) -> None:
+    """Update or append keys in .env file without deleting existing values or comments."""
+    existing_lines: list[str] = []
+    if env_path.exists():
+        with open(env_path, encoding="utf-8") as f:
+            existing_lines = f.readlines()
+
+    updated_keys: set[str] = set()
+    new_lines: list[str] = []
+
+    for line in existing_lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key, _ = stripped.split("=", 1)
+            key = key.strip()
+            if key in updates:
+                new_lines.append(f'{key}="{updates[key]}"\n')
+                updated_keys.add(key)
+                continue
+        new_lines.append(line)
+
+    # Append any keys that weren't present in the existing file
+    remaining_keys = [k for k in updates if k not in updated_keys]
+    if remaining_keys:
+        if new_lines and not new_lines[-1].endswith("\n"):
+            new_lines[-1] += "\n"
+        for k in remaining_keys:
+            new_lines.append(f'{k}="{updates[k]}"\n')
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+
 def get_tokens(
     client_id: str,
     client_secret: str,
@@ -81,16 +114,15 @@ def get_tokens(
             print("\n✅ Successfully retrieved tokens!")
             print(f"REFRESH_TOKEN: {refresh_token}")
 
-            # Append/write to .env
-            env_file = Path(".env")
-            env_lines = [
-                f'YOUTUBE_CLIENT_ID="{client_id}"\n',
-                f'YOUTUBE_CLIENT_SECRET="{client_secret}"\n',
-                f'YOUTUBE_REFRESH_TOKEN="{refresh_token}"\n',
-            ]
-            with open(env_file, "a" if env_file.exists() else "w", encoding="utf-8") as f:
-                f.writelines(env_lines)
+            updates = {
+                "YOUTUBE_CLIENT_ID": client_id,
+                "YOUTUBE_CLIENT_SECRET": client_secret,
+            }
+            if refresh_token:
+                updates["YOUTUBE_REFRESH_TOKEN"] = refresh_token
 
+            env_file = Path(".env")
+            update_env_file(env_file, updates)
             print(f"\n💾 Saved credentials to {env_file.resolve()}")
     except urllib.error.HTTPError as exc:
         print(f"❌ Token exchange failed: {exc.read().decode('utf-8')}")

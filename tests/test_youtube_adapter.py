@@ -238,6 +238,41 @@ class TestYouTubeAdapter(unittest.TestCase):
         token = creds.get_valid_access_token()
         self.assertTrue(len(token) > 10)
 
+    def test_update_env_file_preserves_other_values(self) -> None:
+        import sys
+        import tempfile
+
+        sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+        from get_youtube_token import update_env_file
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / ".env"
+            env_file.write_text(
+                "# Existing comments\n"
+                'OPENROUTER_API_KEY="secret-openrouter-key"\n'
+                "OTHER_CONFIG=123\n\n"
+                'YOUTUBE_CLIENT_ID="old-client-id"\n',
+                encoding="utf-8",
+            )
+
+            update_env_file(
+                env_file,
+                {
+                    "YOUTUBE_CLIENT_ID": "new-client-id",
+                    "YOUTUBE_CLIENT_SECRET": "new-secret",
+                    "YOUTUBE_REFRESH_TOKEN": "new-token",
+                },
+            )
+
+            content = env_file.read_text(encoding="utf-8")
+            self.assertIn('OPENROUTER_API_KEY="secret-openrouter-key"', content)
+            self.assertIn("OTHER_CONFIG=123", content)
+            self.assertIn("# Existing comments", content)
+            self.assertIn('YOUTUBE_CLIENT_ID="new-client-id"', content)
+            self.assertIn('YOUTUBE_CLIENT_SECRET="new-secret"', content)
+            self.assertIn('YOUTUBE_REFRESH_TOKEN="new-token"', content)
+            self.assertNotIn("old-client-id", content)
+
 
 if __name__ == "__main__":
     unittest.main()

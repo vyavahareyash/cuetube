@@ -31,7 +31,7 @@
 |---|---|---|
 | `ingestion` | Playlist / Queue Source | YouTube Data API v3 (`CustomPlaylistAdapter`), Takeout CSV (`TakeoutArchiveAdapter`) |
 | `extraction` | Transcript Extraction | YouTube Transcript API (`OfficialTranscriptAdapter`), Browser Fallback |
-| `classification` | Inference Engine | Gemini API (`GeminiClassifierAdapter`), Rule-based Mock |
+| `classification` | Inference Engine | OpenRouter API (`OpenRouterClassifierAdapter` / `GeminiClassifierAdapter`), Rule-based Mock |
 | `scheduling` | Calendar Target | Google Calendar API (`GCalAdapter`), iCal Export (`ICalFileAdapter`) |
 | `pipeline` | Orchestration | CLI Runner, Scheduled Cron / Worker |
 
