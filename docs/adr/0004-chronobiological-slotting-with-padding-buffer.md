@@ -1,0 +1,3 @@
+# Chronobiological Slotting with Padding Buffer
+
+Scheduling videos naively into open calendar slots ignores human attention cycles and causes schedule overrun due to context switching, note taking, and playback pauses. We match video cognitive demand against chronobiological energy tiers (morning focus, afternoon maintenance, evening unwind) and enforce an operational buffer constraint where video duration plus 10–15 minutes padding must fit within the free slot ($d_v + t_{\text{buffer}} \le L_s$). This prevents mental fatigue from mismatched consumption and guarantees realistic calendar scheduling without meeting collisions.

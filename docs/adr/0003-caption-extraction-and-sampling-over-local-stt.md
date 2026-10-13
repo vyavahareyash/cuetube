@@ -1,0 +1,3 @@
+# Caption Extraction and Sampling Over Local STT
+
+Accurate video classification requires semantic context beyond clickbait titles, but downloading video audio and running local speech-to-text models (such as Whisper) imposes high compute costs, local disk overhead, and slow wall-clock runtimes. We extract existing YouTube subtitles and captions directly, sampling the first 1,500 words, final 500 words, and chapter markers, while falling back gracefully to descriptions and metadata when captions are absent. This avoids all audio download overhead, runs orders of magnitude faster, and keeps prompt payloads strictly within LLM context window budgets.

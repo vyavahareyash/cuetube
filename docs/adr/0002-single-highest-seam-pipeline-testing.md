@@ -1,0 +1,3 @@
+# Single Highest Seam Pipeline Testing
+
+The system is decomposed into multiple deep modules (`ingestion`, `extraction`, `classification`, `scheduling`), which could easily lead to seam proliferation and over-mocked unit tests that mirror implementation details. We standardize on a single highest testing seam at `run_pipeline`, exercising the system end-to-end with mock external adapters (`IngestionSource`, `TranscriptProvider`, `LlmClient`, `CalendarTarget`). This maximizes behavioral test coverage, eliminates brittle mock coupling to internal module boundaries, and allows refactoring internal module implementations freely.
