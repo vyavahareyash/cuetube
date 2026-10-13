@@ -1,7 +1,7 @@
 """Pipeline runner and chronobiological schedule planner."""
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -204,7 +204,14 @@ def run_pipeline(cfg: PipelineConfig) -> PipelineSummary:
     triaged_videos: list[TriagedVideo] = []
     for item in pending_videos:
         try:
-            transcript = cfg.transcript_provider.extract_transcript(item.video_id)
+            transcript = cfg.transcript_provider.extract_transcript(
+                item.video_id,
+                title=item.title,
+                description=item.description,
+                duration_seconds=item.duration_seconds,
+            )
+            if not item.chapters and transcript and transcript.chapters:
+                item = replace(item, chapters=transcript.chapters)
             triage = cfg.classifier.classify_video(item, transcript)
             triaged_videos.append(TriagedVideo(item=item, triage=triage, transcript=transcript))
         except Exception as exc:

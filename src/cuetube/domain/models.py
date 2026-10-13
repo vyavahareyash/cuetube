@@ -33,6 +33,23 @@ class EnergyLevel(StrEnum):
 
 
 @dataclass(frozen=True)
+class ChapterMarker:
+    """Timestamped chapter marker within video."""
+
+    title: str
+    start_seconds: int
+    end_seconds: int | None = None
+
+    def __post_init__(self) -> None:
+        if not self.title or not self.title.strip():
+            raise ValueError("title must not be empty")
+        if self.start_seconds < 0:
+            raise ValueError("start_seconds must not be negative")
+        if self.end_seconds is not None and self.end_seconds < self.start_seconds:
+            raise ValueError("end_seconds must be greater than or equal to start_seconds")
+
+
+@dataclass(frozen=True)
 class VideoItem:
     """Normalized video record."""
 
@@ -43,7 +60,7 @@ class VideoItem:
     published_at: str
     url: str
     description: str = ""
-    chapters: tuple[dict[str, Any], ...] = field(default_factory=tuple)
+    chapters: tuple[ChapterMarker, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if not self.video_id or not self.video_id.strip():
@@ -78,6 +95,9 @@ class Transcript:
     segments: tuple[TranscriptSegment, ...] = field(default_factory=tuple)
     is_sampled: bool = False
     is_fallback: bool = False
+    is_generated: bool = False
+    language: str = "en"
+    chapters: tuple[ChapterMarker, ...] = field(default_factory=tuple)
 
     def __post_init__(self) -> None:
         if not self.video_id or not self.video_id.strip():

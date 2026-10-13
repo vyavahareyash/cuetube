@@ -1,6 +1,7 @@
 """Domain entities and protocol contracts for CueTube."""
 
 from .models import (
+    ChapterMarker,
     CognitiveDemand,
     EnergyLevel,
     EngagementMode,
@@ -23,6 +24,7 @@ from .protocols import (
 )
 
 __all__ = [
+    "ChapterMarker",
     "CognitiveDemand",
     "EnergyLevel",
     "EngagementMode",
