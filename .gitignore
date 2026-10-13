@@ -6,3 +6,8 @@ dist/
 build/
 *.egg-info/
 .coverage
+.env
+.env.*
+credentials/
+client_secret*.json
+*.secret.json
