@@ -7,6 +7,7 @@ from .memory import (
     InMemoryPlaylistTarget,
     InMemoryTranscriptProvider,
 )
+from .takeout import TakeoutArchiveAdapter, TakeoutCsvSource
 
 __all__ = [
     "InMemoryCalendarTarget",
@@ -14,4 +15,6 @@ __all__ = [
     "InMemoryLlmClassifier",
     "InMemoryPlaylistTarget",
     "InMemoryTranscriptProvider",
+    "TakeoutArchiveAdapter",
+    "TakeoutCsvSource",
 ]
