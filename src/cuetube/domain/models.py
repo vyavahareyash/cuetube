@@ -183,6 +183,36 @@ class SchedulePlan:
 
 
 @dataclass(frozen=True)
+class CircadianScheduleConfig:
+    """Configurable daily circadian energy window bounds."""
+
+    morning_start_hour: int = 9
+    morning_end_hour: int = 12
+    afternoon_start_hour: int = 13
+    afternoon_end_hour: int = 17
+    evening_start_hour: int = 17
+    evening_end_hour: int = 21
+    min_slot_duration_minutes: int = 15
+
+    def __post_init__(self) -> None:
+        if not (0 <= self.morning_start_hour < self.morning_end_hour <= 24):
+            raise ValueError(
+                "morning_start_hour must be strictly less than morning_end_hour and within 0..24"
+            )
+        if not (0 <= self.afternoon_start_hour < self.afternoon_end_hour <= 24):
+            raise ValueError(
+                "afternoon_start_hour must be strictly less than afternoon_end_hour "
+                "and within 0..24"
+            )
+        if not (0 <= self.evening_start_hour < self.evening_end_hour <= 24):
+            raise ValueError(
+                "evening_start_hour must be strictly less than evening_end_hour and within 0..24"
+            )
+        if self.min_slot_duration_minutes <= 0:
+            raise ValueError("min_slot_duration_minutes must be greater than zero")
+
+
+@dataclass(frozen=True)
 class PipelineSummary:
     """Structured report of pipeline execution."""
 

@@ -132,9 +132,10 @@ def plan_schedule(
     triaged_videos: list[TriagedVideo],
     available_windows: list[TimeWindow],
     buffer_minutes: int = 15,
+    min_slot_duration_minutes: int = 15,
 ) -> SchedulePlan:
-    """Match triaged videos against available calendar windows using energy tiers and buffers."""
-    remaining_windows = list(available_windows)
+    """Match triaged videos against calendar windows using energy tiers and slot carving."""
+    remaining_windows = sorted(list(available_windows), key=lambda w: w.start_time)
     scheduled_slots: list[ScheduledSlot] = []
     unassigned_videos: list[TriagedVideo] = []
 
@@ -167,9 +168,15 @@ def plan_schedule(
 
         if best_window_idx is not None:
             chosen_window = remaining_windows.pop(best_window_idx)
+            slot_end = chosen_window.start_time + timedelta(minutes=required_mins)
+            allocated_window = TimeWindow(
+                start_time=chosen_window.start_time,
+                end_time=slot_end,
+                energy_level=chosen_window.energy_level,
+            )
             slot = ScheduledSlot(
                 slot_id=f"slot-{tv.item.video_id}-{len(scheduled_slots) + 1}",
-                window=chosen_window,
+                window=allocated_window,
                 video_id=tv.item.video_id,
                 title=tv.item.title,
                 video_duration_minutes=video_mins,
@@ -177,6 +184,18 @@ def plan_schedule(
                 target_playlist=tv.triage.target_playlist,
             )
             scheduled_slots.append(slot)
+
+            # Carve out remaining window if remainder >= min_slot_duration_minutes
+            if slot_end < chosen_window.end_time:
+                remainder_mins = int((chosen_window.end_time - slot_end).total_seconds() // 60)
+                if remainder_mins >= min_slot_duration_minutes:
+                    remainder_window = TimeWindow(
+                        start_time=slot_end,
+                        end_time=chosen_window.end_time,
+                        energy_level=chosen_window.energy_level,
+                    )
+                    remaining_windows.append(remainder_window)
+                    remaining_windows.sort(key=lambda w: w.start_time)
         else:
             unassigned_videos.append(tv)
 

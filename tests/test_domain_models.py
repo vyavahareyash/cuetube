@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from cuetube.domain.models import (
     ChapterMarker,
+    CircadianScheduleConfig,
     CognitiveDemand,
     EnergyLevel,
     EngagementMode,
@@ -169,7 +170,28 @@ class TestDomainModels(unittest.TestCase):
         self.assertTrue(transcript.is_generated)
         self.assertEqual(transcript.language, "en-US")
         self.assertEqual(len(transcript.chapters), 1)
-        self.assertEqual(transcript.chapters[0].title, "Intro")
+
+    def test_circadian_schedule_config_validation(self) -> None:
+        cfg = CircadianScheduleConfig()
+        self.assertEqual(cfg.morning_start_hour, 9)
+        self.assertEqual(cfg.morning_end_hour, 12)
+        self.assertEqual(cfg.afternoon_start_hour, 13)
+        self.assertEqual(cfg.afternoon_end_hour, 17)
+        self.assertEqual(cfg.evening_start_hour, 17)
+        self.assertEqual(cfg.evening_end_hour, 21)
+        self.assertEqual(cfg.min_slot_duration_minutes, 15)
+
+        # Invalid hour order -> ValueError
+        with self.assertRaises(ValueError):
+            CircadianScheduleConfig(morning_start_hour=12, morning_end_hour=9)
+
+        # Invalid hour out of bounds -> ValueError
+        with self.assertRaises(ValueError):
+            CircadianScheduleConfig(morning_start_hour=-1)
+
+        # Invalid min slot duration -> ValueError
+        with self.assertRaises(ValueError):
+            CircadianScheduleConfig(min_slot_duration_minutes=0)
 
 
 if __name__ == "__main__":

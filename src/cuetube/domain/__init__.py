@@ -2,6 +2,7 @@
 
 from .models import (
     ChapterMarker,
+    CircadianScheduleConfig,
     CognitiveDemand,
     EnergyLevel,
     EngagementMode,
@@ -25,6 +26,7 @@ from .protocols import (
 
 __all__ = [
     "ChapterMarker",
+    "CircadianScheduleConfig",
     "CognitiveDemand",
     "EnergyLevel",
     "EngagementMode",
