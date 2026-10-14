@@ -226,8 +226,48 @@ class TestDomainModels(unittest.TestCase):
         self.assertEqual(windows[1].start_time, time(14, 0))
         self.assertEqual(windows[1].end_time, time(16, 30))
 
+        # Day specifications
+        weekday_bw = BlackoutWindow.from_string("weekday:12:00-13:00")
+        self.assertEqual(weekday_bw.days_of_week, (0, 1, 2, 3, 4))
+
+        weekend_bw = BlackoutWindow.from_string("weekend:10:00-12:00")
+        self.assertEqual(weekend_bw.days_of_week, (5, 6))
+
+        at_bw = BlackoutWindow.from_string("12:00-13:00@Mon-Fri")
+        self.assertEqual(at_bw.days_of_week, (0, 1, 2, 3, 4))
+
         # Empty string
         self.assertEqual(parse_blackout_windows(""), ())
+
+    def test_circadian_schedule_config_from_env(self) -> None:
+        from unittest.mock import patch
+
+        env_vars = {
+            "CUETUBE_MORNING_START": "8",
+            "CUETUBE_MORNING_END": "11",
+            "CUETUBE_AFTERNOON_START": "12",
+            "CUETUBE_AFTERNOON_END": "16",
+            "CUETUBE_EVENING_START": "18",
+            "CUETUBE_EVENING_END": "22",
+            "CUETUBE_MIN_SLOT_MINUTES": "20",
+            "CUETUBE_EVENT_PREFIX": "Study: ",
+            "CUETUBE_BLACKOUT_WINDOWS": "weekday:11:30-12:00,16:00-17:00",
+            "CUETUBE_COLOR_MORNING": "9",
+        }
+        with patch.dict("os.environ", env_vars, clear=False):
+            cfg = CircadianScheduleConfig.from_env()
+
+        self.assertEqual(cfg.morning_start_hour, 8)
+        self.assertEqual(cfg.morning_end_hour, 11)
+        self.assertEqual(cfg.afternoon_start_hour, 12)
+        self.assertEqual(cfg.afternoon_end_hour, 16)
+        self.assertEqual(cfg.evening_start_hour, 18)
+        self.assertEqual(cfg.evening_end_hour, 22)
+        self.assertEqual(cfg.min_slot_duration_minutes, 20)
+        self.assertEqual(cfg.event_prefix, "Study: ")
+        self.assertEqual(len(cfg.blackout_windows), 2)
+        self.assertEqual(cfg.blackout_windows[0].days_of_week, (0, 1, 2, 3, 4))
+        self.assertEqual(cfg.energy_colors[EnergyLevel.MORNING_FOCUS], "9")
 
 
 if __name__ == "__main__":

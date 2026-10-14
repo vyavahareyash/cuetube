@@ -354,6 +354,83 @@ class TestOpenRouterAdapter(unittest.TestCase):
             adapter.classify_video(self.sample_item, self.sample_transcript)
         self.assertEqual(call_count, 1)
 
+    def test_truncated_json_healing_and_playlist_inference(self) -> None:
+        summary_text = (
+            "This video demonstrates a ChatGPT prompt to automate job openings, "
+            "offering a practical application of AI for business processes. "
+            "It's suitable for those looking for quick, actionabletips"
+        )
+        truncated_raw = (
+            "{\n"
+            '  "video_id": "HHNqqiXQtPs",\n'
+            '  "category": "AI Tools",\n'
+            '  "cognitive_demand": "Medium (reflective)",\n'
+            '  "engagement_mode": "Reflective",\n'
+            '  "recommended_session_duration_minutes": 1,\n'
+            f'  "summary": "{summary_text}'
+        )
+        resp = {"choices": [{"message": {"content": truncated_raw}}]}
+        adapter = OpenRouterClassifierAdapter(config=self.config, http_transport=lambda req: resp)
+        triage = adapter.classify_video(self.sample_item, self.sample_transcript)
+        self.assertEqual(triage.video_id, "HHNqqiXQtPs")
+        self.assertEqual(triage.category, "AI Tools")
+        self.assertEqual(triage.cognitive_demand, CognitiveDemand.MEDIUM_REFLECTIVE)
+        self.assertEqual(triage.engagement_mode, EngagementMode.REFLECTIVE)
+        self.assertIn("actionabletips", triage.summary)
+        self.assertEqual(triage.target_playlist, "Tech-Tutorials")
+
+    def test_markdown_code_fence_truncated_json_healing(self) -> None:
+        fence_raw = """```json
+{
+  "video_id": "vid-distributed",
+  "category": "Programming Tutorial",
+  "cognitive_demand": "Very High (active)",
+  "engagement_mode": "Active",
+  "recommended_session_duration_minutes": 45,
+  "summary": "In-depth guide to distributed consensus algorithms and practical Raft"""
+        resp = {"choices": [{"message": {"content": fence_raw}}]}
+        adapter = OpenRouterClassifierAdapter(config=self.config, http_transport=lambda req: resp)
+        triage = adapter.classify_video(self.sample_item, self.sample_transcript)
+        self.assertEqual(triage.video_id, "vid-distributed")
+        self.assertEqual(triage.category, "Programming Tutorial")
+        self.assertEqual(triage.cognitive_demand, CognitiveDemand.VERY_HIGH_ACTIVE)
+        self.assertEqual(triage.target_playlist, "Tech-Tutorials")
+
+    def test_missing_category_heals_from_item_metadata(self) -> None:
+        raw_json = json.dumps(
+            {
+                "video_id": "vid-distributed",
+                "cognitive_demand": "High (active)",
+                "engagement_mode": "Active",
+                "recommended_session_duration_minutes": 25,
+                "summary": "Deep dive into distributed systems.",
+                "target_playlist": "Tech-Tutorials",
+            }
+        )
+        resp = {"choices": [{"message": {"content": raw_json}}]}
+        adapter = OpenRouterClassifierAdapter(config=self.config, http_transport=lambda req: resp)
+        triage = adapter.classify_video(self.sample_item, self.sample_transcript)
+        self.assertEqual(triage.video_id, "vid-distributed")
+        self.assertEqual(triage.category, "Tech Academy")  # From item.channel
+
+    def test_category_alias_topic_and_missing_engagement_mode(self) -> None:
+        raw_json = json.dumps(
+            {
+                "video_id": "vid-distributed",
+                "topic": "Consensus Algorithms",
+                "cognitive_demand": "Very High (active)",
+                "recommended_session_duration_minutes": 30,
+                "summary": "Consensus in distributed systems.",
+            }
+        )
+        resp = {"choices": [{"message": {"content": raw_json}}]}
+        adapter = OpenRouterClassifierAdapter(config=self.config, http_transport=lambda req: resp)
+        triage = adapter.classify_video(self.sample_item, self.sample_transcript)
+        self.assertEqual(triage.category, "Consensus Algorithms")
+        self.assertEqual(triage.cognitive_demand, CognitiveDemand.VERY_HIGH_ACTIVE)
+        self.assertEqual(triage.engagement_mode, EngagementMode.ACTIVE)  # Inferred
+        self.assertEqual(triage.target_playlist, "Tech-Tutorials")  # Inferred
+
     def test_live_classification_if_env_configured(self) -> None:
         import os
         from pathlib import Path

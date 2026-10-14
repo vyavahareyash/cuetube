@@ -12,3 +12,4 @@ build/
 credentials/
 client_secret*.json
 *.secret.json
+schedule.json

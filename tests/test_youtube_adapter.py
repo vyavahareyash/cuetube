@@ -220,6 +220,41 @@ class TestYouTubeAdapter(unittest.TestCase):
         self.assertTrue(hasattr(adapter, "add_to_playlist"))
         self.assertTrue(hasattr(adapter, "remove_from_playlist"))
 
+    def test_resolve_or_create_playlist_creates_hyphenated_named_playlist(self) -> None:
+        created_playlists = []
+        inserted_items = []
+
+        def mock_transport(req: urllib.request.Request) -> dict:
+            if "youtube/v3/playlists" in req.full_url and req.get_method() == "GET":
+                return {"items": [{"id": "pl-tech", "snippet": {"title": "Tech-Tutorials"}}]}
+            if "youtube/v3/playlists" in req.full_url and req.get_method() == "POST":
+                data = json.loads(req.data.decode("utf-8"))
+                created_playlists.append(data)
+                return {"id": "pl-newly-created-id", "snippet": data["snippet"]}
+            if "youtube/v3/playlistItems" in req.full_url and req.get_method() == "POST":
+                data = json.loads(req.data.decode("utf-8"))
+                inserted_items.append(data)
+                return {"id": "pi-item-123"}
+            return {}
+
+        creds = OAuthCredentials(
+            "cid",
+            "csec",
+            "rtoken",
+            access_token="mock_token",
+            token_expiry=datetime.now(UTC) + timedelta(hours=1),
+        )
+        target = YouTubePlaylistTarget(creds, http_transport=mock_transport)
+
+        # "Explanations-Queue" is 18 chars without spaces; must be created, not assumed as ID
+        success = target.add_to_playlist("Explanations-Queue", "vid-ai-1")
+        self.assertTrue(success)
+        self.assertEqual(len(created_playlists), 1)
+        self.assertEqual(created_playlists[0]["snippet"]["title"], "Explanations-Queue")
+        self.assertEqual(len(inserted_items), 1)
+        self.assertEqual(inserted_items[0]["snippet"]["playlistId"], "pl-newly-created-id")
+        self.assertEqual(inserted_items[0]["snippet"]["resourceId"]["videoId"], "vid-ai-1")
+
     def test_live_connection_if_env_configured(self) -> None:
         import os
 

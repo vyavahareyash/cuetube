@@ -128,6 +128,13 @@ class InMemoryCalendarTarget:
         self.inserted_events.append(slot)
         return True
 
+    def get_scheduled_video_ids(
+        self,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> set[str]:
+        return {s.video_id for s in self.inserted_events}
+
 
 class InMemoryPlaylistTarget:
     """In-memory playlist tracking mutations and inbox clearing."""

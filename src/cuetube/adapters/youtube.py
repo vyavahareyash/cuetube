@@ -23,6 +23,12 @@ _ISO8601_DURATION_REGEX = re.compile(
 )
 
 
+def _is_youtube_playlist_id(value: str) -> bool:
+    """Check if a string matches a YouTube playlist ID pattern."""
+    cleaned = value.strip()
+    return bool(re.match(r"^(PL|UU|FL|RD)[A-Za-z0-9_-]{16,}$", cleaned)) or cleaned in ("WL", "LL")
+
+
 def parse_iso8601_duration(raw_duration: str | None) -> int:
     """Parse ISO 8601 duration string into integer seconds."""
     if not raw_duration:
@@ -254,14 +260,25 @@ class YouTubeApiSource:
 
     def _resolve_playlist_id(self, playlist_title: str) -> str | None:
         """Query user's playlists to find playlist ID matching title."""
-        params = {"part": "snippet", "mine": "true", "maxResults": "50"}
-        res = self._execute_api_request("playlists", params)
-        for item in res.get("items", []):
-            if (
-                item.get("snippet", {}).get("title", "").strip().lower()
-                == playlist_title.strip().lower()
-            ):
-                return item["id"]
+        if _is_youtube_playlist_id(playlist_title):
+            return playlist_title
+
+        next_page = None
+        while True:
+            params = {"part": "snippet", "mine": "true", "maxResults": "50"}
+            if next_page:
+                params["pageToken"] = next_page
+            res = self._execute_api_request("playlists", params)
+            for item in res.get("items", []):
+                if (
+                    item.get("snippet", {}).get("title", "").strip().lower()
+                    == playlist_title.strip().lower()
+                ):
+                    return item["id"]
+            next_page = res.get("nextPageToken")
+            if not next_page:
+                break
+
         return None
 
     def _fetch_playlist_items(self, playlist_id: str) -> list[dict[str, Any]]:
@@ -440,15 +457,25 @@ class YouTubePlaylistTarget:
         if norm_title in self._playlist_title_to_id:
             return self._playlist_title_to_id[norm_title]
 
-        params = {"part": "snippet", "mine": "true", "maxResults": "50"}
-        res = self._execute_api_request("playlists", params)
-        for item in res.get("items", []):
-            title = item.get("snippet", {}).get("title", "")
-            pid = item.get("id")
-            if pid and title:
-                self._playlist_title_to_id[title.strip().lower()] = pid
+        next_page = None
+        while True:
+            params = {"part": "snippet", "mine": "true", "maxResults": "50"}
+            if next_page:
+                params["pageToken"] = next_page
+            res = self._execute_api_request("playlists", params)
+            for item in res.get("items", []):
+                title = item.get("snippet", {}).get("title", "")
+                pid = item.get("id")
+                if pid and title:
+                    self._playlist_title_to_id[title.strip().lower()] = pid
+            next_page = res.get("nextPageToken")
+            if not next_page:
+                break
 
-        return self._playlist_title_to_id.get(norm_title)
+        resolved = self._playlist_title_to_id.get(norm_title)
+        if not resolved and _is_youtube_playlist_id(playlist_title):
+            return playlist_title
+        return resolved
 
     def _resolve_or_create_playlist(self, playlist_title: str) -> str:
         """Resolve existing playlist or create it via playlists.insert (50 quota units)."""

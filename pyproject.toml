@@ -16,6 +16,9 @@ dev = [
     "pytest>=8.0.0",
 ]
 
+[project.scripts]
+cuetube = "cuetube.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

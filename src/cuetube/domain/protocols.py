@@ -37,11 +37,17 @@ class LlmClassifier(Protocol):
 
 
 class CalendarTarget(Protocol):
-    """Seam for calendar queries and event insertion."""
+    """Seam for calendar queries, event insertion, and repeat deduplication."""
 
     def query_availability(self, start_time: datetime, end_time: datetime) -> list[TimeWindow]: ...
 
     def insert_event(self, slot: ScheduledSlot) -> bool: ...
+
+    def get_scheduled_video_ids(
+        self,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> set[str]: ...
 
 
 class PlaylistTarget(Protocol):
