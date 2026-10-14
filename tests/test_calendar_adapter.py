@@ -325,7 +325,7 @@ class TestGoogleCalendarAdapter(unittest.TestCase):
                 url=req.full_url,
                 code=401,
                 msg="Unauthorized",
-                hdrs=urllib.response.addinfourl(None, {}, "").info(),  # type: ignore
+                hdrs=urllib.response.addinfourl(io.BytesIO(b""), {}, "").info(),  # type: ignore
                 fp=io.BytesIO(b"Unauthorized"),
             )
 
@@ -462,6 +462,238 @@ class TestGoogleCalendarAdapter(unittest.TestCase):
                 adapter.schedule_config.blackout_windows[0].start_time,
                 time(10, 0),
             )
+
+    def test_insert_event_into_dedicated_target_calendar_existing(self) -> None:
+        recorded_requests: list[urllib.request.Request] = []
+
+        def mock_transport(req: urllib.request.Request) -> dict[str, Any]:
+            recorded_requests.append(req)
+            if "calendarList" in req.full_url:
+                return {
+                    "items": [
+                        {"id": "primary", "summary": "User Primary"},
+                        {"id": "cuetube-cal-123@group.calendar.google.com", "summary": "CueTube"},
+                    ]
+                }
+            if "/events" in req.full_url:
+                return {"id": "event-999", "status": "confirmed"}
+            return {}
+
+        adapter = GoogleCalendarAdapter(
+            credentials=self.creds,
+            target_calendar="CueTube",
+            http_transport=mock_transport,
+        )
+
+        window = TimeWindow(
+            start_time=self.base_day.replace(hour=9, minute=0),
+            end_time=self.base_day.replace(hour=9, minute=30),
+            energy_level=EnergyLevel.MORNING_FOCUS,
+        )
+        slot = ScheduledSlot(
+            slot_id="slot-1",
+            window=window,
+            video_id="v1",
+            title="Python Testing",
+            video_duration_minutes=20,
+            buffer_minutes=10,
+            target_playlist="Coding",
+        )
+
+        success = adapter.insert_event(slot)
+        self.assertTrue(success)
+        # Check that event was posted to the secondary calendar
+        event_reqs = [r for r in recorded_requests if "/events" in r.full_url]
+        self.assertEqual(len(event_reqs), 1)
+        self.assertIn("cuetube-cal-123%40group.calendar.google.com/events", event_reqs[0].full_url)
+
+    def test_insert_event_creates_target_calendar_if_missing(self) -> None:
+        recorded_requests: list[urllib.request.Request] = []
+
+        def mock_transport(req: urllib.request.Request) -> dict[str, Any]:
+            recorded_requests.append(req)
+            if "calendarList" in req.full_url:
+                return {"items": [{"id": "primary", "summary": "User Primary"}]}
+            if req.full_url.endswith("/calendars") and req.get_method() == "POST":
+                return {
+                    "id": "new-cal-456@group.calendar.google.com",
+                    "summary": "CueTube",
+                }
+            if "/events" in req.full_url:
+                return {"id": "event-111", "status": "confirmed"}
+            return {}
+
+        adapter = GoogleCalendarAdapter(
+            credentials=self.creds,
+            target_calendar="CueTube",
+            http_transport=mock_transport,
+        )
+
+        window = TimeWindow(
+            start_time=self.base_day.replace(hour=14, minute=0),
+            end_time=self.base_day.replace(hour=14, minute=45),
+            energy_level=EnergyLevel.AFTERNOON_MAINTENANCE,
+        )
+        slot1 = ScheduledSlot(
+            slot_id="slot-1",
+            window=window,
+            video_id="v1",
+            title="Video One",
+            video_duration_minutes=30,
+            buffer_minutes=15,
+            target_playlist="Tech",
+        )
+        slot2 = ScheduledSlot(
+            slot_id="slot-2",
+            window=window,
+            video_id="v2",
+            title="Video Two",
+            video_duration_minutes=30,
+            buffer_minutes=15,
+            target_playlist="Tech",
+        )
+
+        # First insert creates calendar and posts event
+        self.assertTrue(adapter.insert_event(slot1))
+        # Second insert reuses cached calendar ID without querying calendarList or creating
+        self.assertTrue(adapter.insert_event(slot2))
+
+        cal_create_reqs = [
+            r
+            for r in recorded_requests
+            if r.full_url.endswith("/calendars") and r.get_method() == "POST"
+        ]
+        self.assertEqual(len(cal_create_reqs), 1)
+
+        event_reqs = [r for r in recorded_requests if "/events" in r.full_url]
+        self.assertEqual(len(event_reqs), 2)
+        for er in event_reqs:
+            self.assertIn("new-cal-456%40group.calendar.google.com/events", er.full_url)
+
+    def test_target_calendar_with_direct_id(self) -> None:
+        recorded_requests: list[urllib.request.Request] = []
+
+        def mock_transport(req: urllib.request.Request) -> dict[str, Any]:
+            recorded_requests.append(req)
+            return {"id": "event-222", "status": "confirmed"}
+
+        adapter = GoogleCalendarAdapter(
+            credentials=self.creds,
+            target_calendar="custom-cal@group.calendar.google.com",
+            http_transport=mock_transport,
+        )
+
+        window = TimeWindow(
+            start_time=self.base_day.replace(hour=17, minute=0),
+            end_time=self.base_day.replace(hour=17, minute=45),
+            energy_level=EnergyLevel.EVENING_UNWIND,
+        )
+        slot = ScheduledSlot(
+            slot_id="slot-1",
+            window=window,
+            video_id="v1",
+            title="Evening Relaxation",
+            video_duration_minutes=30,
+            buffer_minutes=15,
+            target_playlist="Chill",
+        )
+
+        self.assertTrue(adapter.insert_event(slot))
+        # No calendarList discovery call should be made when direct ID with '@' is supplied
+        self.assertEqual(len(recorded_requests), 1)
+        self.assertIn(
+            "custom-cal%40group.calendar.google.com/events",
+            recorded_requests[0].full_url,
+        )
+
+    def test_query_availability_includes_existing_target_calendar(self) -> None:
+        recorded_requests: list[urllib.request.Request] = []
+
+        def mock_transport(req: urllib.request.Request) -> dict[str, Any]:
+            recorded_requests.append(req)
+            if "calendarList" in req.full_url:
+                return {
+                    "items": [
+                        {"id": "primary", "summary": "Primary Cal"},
+                        {"id": "cuetube-cal-123@group.calendar.google.com", "summary": "CueTube"},
+                    ]
+                }
+            if "freeBusy" in req.full_url:
+                return {
+                    "calendars": {
+                        "primary": {"busy": []},
+                        "cuetube-cal-123@group.calendar.google.com": {"busy": []},
+                    }
+                }
+            return {}
+
+        adapter = GoogleCalendarAdapter(
+            credentials=self.creds,
+            calendar_ids=("primary",),
+            target_calendar="CueTube",
+            http_transport=mock_transport,
+        )
+
+        adapter.query_availability(
+            self.base_day.replace(hour=8),
+            self.base_day.replace(hour=20),
+        )
+
+        freebusy_reqs = [r for r in recorded_requests if "freeBusy" in r.full_url]
+        self.assertEqual(len(freebusy_reqs), 1)
+        payload = json.loads(freebusy_reqs[0].data.decode("utf-8"))
+        queried_ids = [item["id"] for item in payload["items"]]
+        self.assertIn("primary", queried_ids)
+        self.assertIn("cuetube-cal-123@group.calendar.google.com", queried_ids)
+
+    def test_from_env_loads_target_calendar(self) -> None:
+        import os
+        from unittest.mock import patch
+
+        env_vars = {
+            "CALENDAR_CLIENT_ID": "cid",
+            "CALENDAR_CLIENT_SECRET": "csec",
+            "CALENDAR_REFRESH_TOKEN": "rtok",
+            "CUETUBE_TARGET_CALENDAR": "StudyTube",
+        }
+        with patch.dict(os.environ, env_vars, clear=False):
+            adapter = GoogleCalendarAdapter.from_env()
+            self.assertEqual(adapter.target_calendar, "StudyTube")
+
+    def test_get_scheduled_video_ids(self) -> None:
+        def mock_transport(req: urllib.request.Request) -> dict[str, Any]:
+            if "/events" in req.full_url:
+                return {
+                    "items": [
+                        {
+                            "id": "e1",
+                            "extendedProperties": {"private": {"cuetube_video_id": "vid-ext-1"}},
+                        },
+                        {
+                            "id": "e2",
+                            "description": (
+                                "Video: https://youtube.com/watch?v=vid-desc-2\nSummary: ..."
+                            ),
+                        },
+                        {
+                            "id": "e3",
+                            "description": "Unrelated meeting with no video link",
+                        },
+                    ]
+                }
+            return {}
+
+        adapter = GoogleCalendarAdapter(
+            credentials=self.creds,
+            target_calendar="cuetube@group.calendar.google.com",
+            http_transport=mock_transport,
+        )
+
+        vids = adapter.get_scheduled_video_ids(
+            start_time=self.base_day,
+            end_time=self.base_day + timedelta(days=7),
+        )
+        self.assertEqual(vids, {"vid-ext-1", "vid-desc-2"})
 
 
 if __name__ == "__main__":

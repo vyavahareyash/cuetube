@@ -38,15 +38,25 @@ ruff check .
 ruff format .
 ```
 
-### 4. Run Simulated Pipeline
-```bash
-python3 -c "
-import sys; sys.path.insert(0, 'src')
-from cuetube.pipeline.runner import run_pipeline, PipelineConfig
+### 4. Run Pipeline via Unified CLI
 
-summary = run_pipeline(PipelineConfig.create_mock_default())
-print('Pipeline Summary:', summary)
-"
+CueTube provides a unified CLI for local execution, draft inspection, schedule export, and background daemon polling:
+
+```bash
+# Run simulated pipeline pass
+python3 -m cuetube.cli run --mock
+
+# Inspect draft schedule and request user approval before mutating calendar/playlists
+python3 -m cuetube.cli run --confirm
+
+# Dry-run plan and export to iCalendar (.ics) or JSON without mutations
+python3 -m cuetube.cli run --dry-run --export schedule.ics
+
+# Run autonomous live pipeline (requires .env configuration)
+python3 -m cuetube.cli run
+
+# Run scheduled background worker (polling every 60 minutes)
+python3 -m cuetube.cli daemon --interval-minutes 60
 ```
 
 ## Product Roadmap & Vision

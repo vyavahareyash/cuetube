@@ -30,5 +30,18 @@
 - **Adapters**: `GoogleCalendarTarget`, `InMemoryCalendarTarget`.
 
 ## 6. `pipeline`
-- **Interface**: `run_pipeline(cfg: PipelineConfig) -> PipelineSummary`
+- **Interface**: `run_pipeline(cfg: PipelineConfig, dry_run: bool = False, confirm_callback: Callable[[SchedulePlan], bool] | None = None, export_path: str | Path | None = None) -> PipelineSummary`
 - **Depth**: End-to-end orchestration, error recovery, step checkpoints, caller only provides config.
+- **Factory**: `PipelineConfig.from_env(...)` resolves and wires live YouTube, OpenRouter, and Google Calendar adapters.
+
+## 7. `adapters.export`
+- **Interface**: `export_schedule_to_json(plan: SchedulePlan, output_path: Path | str | None)` / `export_schedule_to_ics(plan: SchedulePlan, output_path: Path | str | None)`
+- **Depth**: Pure stdlib JSON and RFC 5545 iCalendar generation for offline calendar import without API mutations.
+
+## 8. `cli`
+- **Interface**: `cuetube [run|daemon] [--mock] [--dry-run] [--confirm] [--export <path>] [--concurrency <N>] [--progress|--no-progress] [--json]`
+- **Depth**: Unified CLI runner, daemon scheduler, controlled worker concurrency, interactive single-line visual progress bar (`tqdm`-style), draft preview table, and exit codes.
+
+## 9. `config`
+- **Interface**: `load_dotenv(path)` / `get_env_str(k, def)` / `get_env_int(k, def)` / `get_env_bool(k, def)` / `get_env_list(k, def)`
+- **Depth**: Pure stdlib `.env` file loader and typed environment variable parser with fallback defaults (precedence: CLI flag > env var > `.env` file > hardcoded fallback).

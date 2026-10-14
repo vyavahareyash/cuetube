@@ -166,6 +166,9 @@ class ScheduledSlot:
     video_duration_minutes: int
     buffer_minutes: int
     target_playlist: str
+    summary: str = ""
+    chapters: tuple[ChapterMarker, ...] = field(default_factory=tuple)
+    video_url: str = ""
 
     def __post_init__(self) -> None:
         if not self.slot_id or not self.slot_id.strip():
@@ -180,6 +183,49 @@ class SchedulePlan:
 
     slots: tuple[ScheduledSlot, ...] = field(default_factory=tuple)
     unassigned_videos: tuple[TriagedVideo, ...] = field(default_factory=tuple)
+
+
+_DAY_NAME_MAP: dict[str, int] = {
+    "mon": 0,
+    "monday": 0,
+    "tue": 1,
+    "tues": 1,
+    "tuesday": 1,
+    "wed": 2,
+    "wednesday": 2,
+    "thu": 3,
+    "thur": 3,
+    "thurs": 3,
+    "thursday": 3,
+    "fri": 4,
+    "friday": 4,
+    "sat": 5,
+    "saturday": 5,
+    "sun": 6,
+    "sunday": 6,
+}
+
+
+def _parse_days_spec(spec: str) -> tuple[int, ...]:
+    cleaned = spec.strip().lower()
+    if cleaned in ("weekday", "weekdays"):
+        return (0, 1, 2, 3, 4)
+    if cleaned in ("weekend", "weekends"):
+        return (5, 6)
+    if "-" in cleaned and not any(ch.isdigit() for ch in cleaned):
+        parts = cleaned.split("-", 1)
+        start_d = _DAY_NAME_MAP.get(parts[0].strip(), 0)
+        end_d = _DAY_NAME_MAP.get(parts[1].strip(), 6)
+        if start_d <= end_d:
+            return tuple(range(start_d, end_d + 1))
+    days = []
+    for p in cleaned.split(","):
+        p = p.strip()
+        if p.isdigit():
+            days.append(int(p))
+        elif p in _DAY_NAME_MAP:
+            days.append(_DAY_NAME_MAP[p])
+    return tuple(sorted(set(days))) if days else (0, 1, 2, 3, 4, 5, 6)
 
 
 @dataclass(frozen=True)
@@ -203,8 +249,19 @@ class BlackoutWindow:
         raw: str,
         days_of_week: tuple[int, ...] = (0, 1, 2, 3, 4, 5, 6),
     ) -> "BlackoutWindow":
-        """Parse 'HH:MM-HH:MM' string into BlackoutWindow."""
-        parts = raw.strip().split("-")
+        """Parse 'HH:MM-HH:MM', 'weekday:HH:MM-HH:MM', or 'HH:MM-HH:MM@Mon-Fri'."""
+        cleaned = raw.strip()
+        if "@" in cleaned:
+            time_part, days_part = cleaned.split("@", 1)
+            time_part = time_part.strip()
+            days_of_week = _parse_days_spec(days_part.strip())
+        elif ":" in cleaned and cleaned.count(":") > 2:
+            days_part, time_part = cleaned.split(":", 1)
+            days_of_week = _parse_days_spec(days_part.strip())
+        else:
+            time_part = cleaned
+
+        parts = time_part.split("-")
         if len(parts) != 2:
             raise ValueError(f"Invalid blackout window format '{raw}', expected 'HH:MM-HH:MM'")
         start_parts = [int(p) for p in parts[0].strip().split(":")]
@@ -238,6 +295,14 @@ class CircadianScheduleConfig:
     evening_end_hour: int = 21
     min_slot_duration_minutes: int = 15
     blackout_windows: tuple[BlackoutWindow, ...] = field(default_factory=tuple)
+    energy_colors: dict[EnergyLevel, str] = field(
+        default_factory=lambda: {
+            EnergyLevel.MORNING_FOCUS: "11",
+            EnergyLevel.AFTERNOON_MAINTENANCE: "5",
+            EnergyLevel.EVENING_UNWIND: "2",
+        }
+    )
+    event_prefix: str = "CueTube: "
 
     def __post_init__(self) -> None:
         if not (0 <= self.morning_start_hour < self.morning_end_hour <= 24):
@@ -255,6 +320,47 @@ class CircadianScheduleConfig:
             )
         if self.min_slot_duration_minutes <= 0:
             raise ValueError("min_slot_duration_minutes must be greater than zero")
+
+    @classmethod
+    def from_env(cls) -> "CircadianScheduleConfig":
+        """Load circadian schedule configuration and blackouts from environment."""
+        import os
+
+        from cuetube.config import get_env_int, get_env_str, load_dotenv
+
+        load_dotenv()
+        raw_bo = get_env_str("CUETUBE_BLACKOUT_WINDOWS") or os.getenv("BLACKOUT_WINDOWS") or ""
+        blackouts = parse_blackout_windows(raw_bo) if raw_bo else ()
+        m_start = get_env_int("CUETUBE_MORNING_START", 9)
+        m_end = get_env_int("CUETUBE_MORNING_END", 12)
+        a_start = get_env_int("CUETUBE_AFTERNOON_START", 13)
+        a_end = get_env_int("CUETUBE_AFTERNOON_END", 17)
+        e_start = get_env_int("CUETUBE_EVENING_START", 17)
+        e_end = get_env_int("CUETUBE_EVENING_END", 21)
+        min_slot = get_env_int("CUETUBE_MIN_SLOT_MINUTES", 15)
+        raw_prefix = os.getenv("CUETUBE_EVENT_PREFIX")
+        prefix = raw_prefix if raw_prefix is not None else "CueTube: "
+
+        m_color = get_env_str("CUETUBE_COLOR_MORNING", "11") or "11"
+        a_color = get_env_str("CUETUBE_COLOR_AFTERNOON", "5") or "5"
+        e_color = get_env_str("CUETUBE_COLOR_EVENING", "2") or "2"
+        energy_colors = {
+            EnergyLevel.MORNING_FOCUS: m_color,
+            EnergyLevel.AFTERNOON_MAINTENANCE: a_color,
+            EnergyLevel.EVENING_UNWIND: e_color,
+        }
+        return cls(
+            morning_start_hour=m_start,
+            morning_end_hour=m_end,
+            afternoon_start_hour=a_start,
+            afternoon_end_hour=a_end,
+            evening_start_hour=e_start,
+            evening_end_hour=e_end,
+            min_slot_duration_minutes=min_slot,
+            blackout_windows=blackouts,
+            energy_colors=energy_colors,
+            event_prefix=prefix,
+        )
 
 
 @dataclass(frozen=True)
