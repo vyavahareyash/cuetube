@@ -20,6 +20,7 @@ from cuetube.adapters.memory import (
 )
 from cuetube.adapters.transcript import hydrate_video_item
 from cuetube.domain.models import (
+    CircadianScheduleConfig,
     CognitiveDemand,
     EnergyLevel,
     PipelineSummary,
@@ -117,22 +118,30 @@ class PipelineConfig:
         )
 
     @classmethod
-    def from_env(
+    def create(
         cls,
+        openrouter_api_key: str | None = None,
+        openrouter_model: str | None = None,
+        google_credentials: Any | None = None,
+        google_client_id: str | None = None,
+        google_client_secret: str | None = None,
+        google_refresh_token: str | None = None,
         inbox_playlist_name: str | None = None,
         buffer_minutes: int | None = None,
         planning_days: int | None = None,
         calendar_ids: tuple[str, ...] | None = None,
         include_all_accessible_calendars: bool | None = None,
         target_calendar: str | None = None,
+        schedule_config: CircadianScheduleConfig | None = None,
         hydrate_metadata: bool = True,
         takeout_path: str | Path | None = None,
         http_transport: Callable[[urllib.request.Request], Any] | None = None,
         concurrency: int | None = None,
+        load_env: bool = True,
     ) -> "PipelineConfig":
-        """Factory assembling live production adapters from environment and configuration."""
+        """Factory assembling live production adapters from direct params or environment."""
         from cuetube.adapters.calendar import GoogleCalendarAdapter
-        from cuetube.adapters.openrouter import OpenRouterClassifierAdapter
+        from cuetube.adapters.openrouter import OpenRouterClassifierAdapter, OpenRouterConfig
         from cuetube.adapters.takeout import TakeoutArchiveAdapter
         from cuetube.adapters.transcript import YouTubeTranscriptProvider
         from cuetube.adapters.youtube import (
@@ -148,60 +157,86 @@ class PipelineConfig:
             load_dotenv,
         )
 
-        load_dotenv()
+        if load_env:
+            load_dotenv()
+
         effective_inbox = (
             inbox_playlist_name
             if inbox_playlist_name is not None
-            else (get_env_str("CUETUBE_INBOX", "Queue-Inbox") or "Queue-Inbox")
+            else (get_env_str("CUETUBE_INBOX", "Queue-Inbox") if load_env else "Queue-Inbox")
+            or "Queue-Inbox"
         )
         effective_buffer = (
             buffer_minutes
             if buffer_minutes is not None
-            else get_env_int("CUETUBE_BUFFER_MINUTES", 15)
+            else (get_env_int("CUETUBE_BUFFER_MINUTES", 15) if load_env else 15)
         )
         effective_days = (
-            planning_days if planning_days is not None else get_env_int("CUETUBE_PLANNING_DAYS", 7)
+            planning_days
+            if planning_days is not None
+            else (get_env_int("CUETUBE_PLANNING_DAYS", 7) if load_env else 7)
         )
         effective_calendar_ids = (
             calendar_ids
             if calendar_ids is not None
-            else get_env_list("CUETUBE_CALENDAR_IDS", ("primary",))
+            else (get_env_list("CUETUBE_CALENDAR_IDS", ("primary",)) if load_env else ("primary",))
         )
         effective_all_cals = (
             include_all_accessible_calendars
             if include_all_accessible_calendars is not None
-            else get_env_bool("CUETUBE_ALL_CALENDARS", False)
+            else (get_env_bool("CUETUBE_ALL_CALENDARS", False) if load_env else False)
         )
         effective_target_cal = (
             target_calendar
             if target_calendar is not None
             else (
-                get_env_str("CUETUBE_TARGET_CALENDAR", None)
-                or get_env_str("CUETUBE_TARGET_CALENDAR_ID", "primary")
-                or "primary"
+                (
+                    get_env_str("CUETUBE_TARGET_CALENDAR", None)
+                    or get_env_str("CUETUBE_TARGET_CALENDAR_ID", "primary")
+                )
+                if load_env
+                else "primary"
             )
+            or "primary"
         )
         effective_takeout = (
-            takeout_path if takeout_path is not None else get_env_str("CUETUBE_TAKEOUT_PATH", None)
+            takeout_path
+            if takeout_path is not None
+            else (get_env_str("CUETUBE_TAKEOUT_PATH", None) if load_env else None)
         )
         effective_concurrency = (
-            concurrency if concurrency is not None else get_env_int("CUETUBE_CONCURRENCY", 4)
+            concurrency
+            if concurrency is not None
+            else (get_env_int("CUETUBE_CONCURRENCY", 4) if load_env else 4)
         )
 
-        # 1. Ingestion Source
-        if effective_takeout:
-            ingestion_source: IngestionSource = TakeoutArchiveAdapter(effective_takeout)
-        else:
-            yt_creds = None
+        # Resolve Google/YouTube OAuth Credentials
+        yt_creds = None
+        if google_credentials is not None:
+            yt_creds = google_credentials
+        elif google_client_id and google_client_secret and google_refresh_token:
+            yt_creds = OAuthCredentials(
+                client_id=google_client_id,
+                client_secret=google_client_secret,
+                refresh_token=google_refresh_token,
+            )
+        elif load_env:
             for pfx in ("YOUTUBE_", "GOOGLE_"):
                 try:
                     yt_creds = OAuthCredentials.from_env(env_prefix=pfx)
                     break
                 except Exception:
                     continue
+
+        # 1. Ingestion Source
+        if effective_takeout:
+            ingestion_source: IngestionSource = TakeoutArchiveAdapter(effective_takeout)
+        else:
             if yt_creds is None:
                 raise ValueError(
-                    "Could not find OAuth credentials with YOUTUBE_ or GOOGLE_ prefix."
+                    "Missing Google/YouTube credentials for ingestion. Provide "
+                    "google_credentials, (google_client_id, google_client_secret, "
+                    "google_refresh_token), or configure environment."
                 )
             ingestion_source = YouTubeApiSource(
                 credentials=yt_creds,
@@ -215,30 +250,50 @@ class PipelineConfig:
         )
 
         # 3. LLM Classifier
-        classifier: LlmClassifier = OpenRouterClassifierAdapter.from_env(
-            http_transport=http_transport
-        )
+        if openrouter_api_key:
+            or_cfg = OpenRouterConfig(
+                api_key=openrouter_api_key,
+                model=openrouter_model or "google/gemini-2.5-flash",
+            )
+            classifier: LlmClassifier = OpenRouterClassifierAdapter(
+                config=or_cfg,
+                http_transport=http_transport,
+            )
+        elif load_env:
+            classifier = OpenRouterClassifierAdapter.from_env(http_transport=http_transport)
+        else:
+            raise ValueError(
+                "Missing OpenRouter credentials. Provide openrouter_api_key "
+                "or configure environment."
+            )
 
         # 4. Calendar Target
-        calendar_target: CalendarTarget = GoogleCalendarAdapter.from_env(
+        if yt_creds is None:
+            raise ValueError(
+                "Missing Google credentials for calendar target. Provide "
+                "google_credentials, (google_client_id, google_client_secret, "
+                "google_refresh_token), or configure environment."
+            )
+
+        if schedule_config is not None:
+            effective_schedule_config = schedule_config
+        elif load_env:
+            effective_schedule_config = CircadianScheduleConfig.from_env()
+        else:
+            effective_schedule_config = CircadianScheduleConfig()
+
+        calendar_target: CalendarTarget = GoogleCalendarAdapter(
+            credentials=yt_creds,
             calendar_ids=effective_calendar_ids,
+            schedule_config=effective_schedule_config,
             include_all_accessible_calendars=effective_all_cals,
             target_calendar=effective_target_cal,
             http_transport=http_transport,
         )
 
         # 5. Playlist Target
-        pl_creds = None
-        for pfx in ("YOUTUBE_", "GOOGLE_"):
-            try:
-                pl_creds = OAuthCredentials.from_env(env_prefix=pfx)
-                break
-            except Exception:
-                continue
-        if pl_creds is None:
-            raise ValueError("Could not find OAuth credentials for playlist mutations.")
         playlist_target: PlaylistTarget = YouTubePlaylistTarget(
-            credentials=pl_creds,
+            credentials=yt_creds,
             http_transport=http_transport,
         )
 
@@ -258,6 +313,37 @@ class PipelineConfig:
             planning_end=planning_end,
             hydrate_metadata=hydrate_metadata,
             concurrency=effective_concurrency,
+        )
+
+    @classmethod
+    def from_env(
+        cls,
+        inbox_playlist_name: str | None = None,
+        buffer_minutes: int | None = None,
+        planning_days: int | None = None,
+        calendar_ids: tuple[str, ...] | None = None,
+        include_all_accessible_calendars: bool | None = None,
+        target_calendar: str | None = None,
+        schedule_config: CircadianScheduleConfig | None = None,
+        hydrate_metadata: bool = True,
+        takeout_path: str | Path | None = None,
+        http_transport: Callable[[urllib.request.Request], Any] | None = None,
+        concurrency: int | None = None,
+    ) -> "PipelineConfig":
+        """Factory assembling live production adapters from environment and configuration."""
+        return cls.create(
+            inbox_playlist_name=inbox_playlist_name,
+            buffer_minutes=buffer_minutes,
+            planning_days=planning_days,
+            calendar_ids=calendar_ids,
+            include_all_accessible_calendars=include_all_accessible_calendars,
+            target_calendar=target_calendar,
+            schedule_config=schedule_config,
+            hydrate_metadata=hydrate_metadata,
+            takeout_path=takeout_path,
+            http_transport=http_transport,
+            concurrency=concurrency,
+            load_env=True,
         )
 
 

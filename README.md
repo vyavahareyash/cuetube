@@ -5,6 +5,12 @@ Autonomous YouTube backlog triage and calendar scheduling pipeline.
 ## Overview
 Turns unstructured video backlogs (custom intake playlist / Google Takeout exports) into structured, energy-aware calendar viewing blocks via automated extraction, LLM classification, and calendar slotting.
 
+## Installation
+
+```bash
+pip install cuetube
+```
+
 ## Quickstart & Development
 
 ### 1. Setup Environment
@@ -44,20 +50,80 @@ CueTube provides a unified CLI for local execution, draft inspection, schedule e
 
 ```bash
 # Run simulated pipeline pass
-python3 -m cuetube.cli run --mock
+cuetube run --mock
 
 # Inspect draft schedule and request user approval before mutating calendar/playlists
-python3 -m cuetube.cli run --confirm
+cuetube run --confirm
 
 # Dry-run plan and export to iCalendar (.ics) or JSON without mutations
-python3 -m cuetube.cli run --dry-run --export schedule.ics
+cuetube run --dry-run --export schedule.ics
 
 # Run autonomous live pipeline (requires .env configuration)
-python3 -m cuetube.cli run
+cuetube run
 
 # Run scheduled background worker (polling every 60 minutes)
-python3 -m cuetube.cli daemon --interval-minutes 60
+cuetube daemon --interval-minutes 60
 ```
+
+### 5. Python Library Usage
+
+CueTube can be imported and configured directly via method parameters without `.env` or environment variables:
+
+```python
+from cuetube import CircadianScheduleConfig, OAuthCredentials, PipelineConfig, run_pipeline
+
+# Option A: Direct in-code parameter initialization (zero .env required)
+cfg = PipelineConfig.create(
+    openrouter_api_key="sk-or-v1-...",
+    google_client_id="your-client-id.apps.googleusercontent.com",
+    google_client_secret="your-client-secret",
+    google_refresh_token="your-refresh-token",
+    target_calendar="CueTube",
+    buffer_minutes=15,
+    planning_days=7,
+    schedule_config=CircadianScheduleConfig(morning_start_hour=8, event_prefix="[Study] "),
+    load_env=False,
+)
+
+# Option B: Pass pre-authenticated credentials directly
+creds = OAuthCredentials(client_id="...", client_secret="...", refresh_token="...")
+cfg = PipelineConfig.create(
+    openrouter_api_key="sk-or-v1-...",
+    google_credentials=creds,
+    load_env=False,
+)
+
+# Option C: Load automatically from environment variables or .env
+cfg = PipelineConfig.from_env()
+
+# Execute pipeline (supports dry_run=True, progress_callback, etc.)
+summary = run_pipeline(cfg, dry_run=True)
+print(f"Ingested: {summary.total_ingested}, Scheduled: {summary.total_scheduled}")
+```
+
+## Configuration Reference
+
+CueTube parameters can be supplied via environment variables, CLI options, or Python constructor parameters:
+
+| Parameter | Env Variable | Python Kwarg (`PipelineConfig.create`) | CLI Option | Default | Description |
+|---|---|---|---|---|---|
+| **Google Client ID** | `GOOGLE_CLIENT_ID` / `YOUTUBE_CLIENT_ID` | `google_client_id` | N/A | `None` | OAuth 2.0 Desktop Client ID |
+| **Google Client Secret** | `GOOGLE_CLIENT_SECRET` / `YOUTUBE_CLIENT_SECRET` | `google_client_secret` | N/A | `None` | OAuth 2.0 Desktop Client Secret |
+| **Google Refresh Token** | `GOOGLE_REFRESH_TOKEN` / `YOUTUBE_REFRESH_TOKEN` | `google_refresh_token` | N/A | `None` | Long-lived OAuth refresh token |
+| **OpenRouter API Key** | `OPENROUTER_API_KEY` | `openrouter_api_key` | N/A | `None` | OpenRouter authentication key |
+| **OpenRouter Model** | `OPENROUTER_MODEL` | `openrouter_model` | N/A | `"google/gemini-2.5-flash"` | LLM model for triage classification |
+| **Intake Playlist** | `CUETUBE_INBOX` | `inbox_playlist_name` | `--inbox` | `"Queue-Inbox"` | Source YouTube intake playlist name or ID |
+| **Buffer Minutes** | `CUETUBE_BUFFER_MINUTES` | `buffer_minutes` | `--buffer` | `15` | Operational gap (minutes) per scheduled video |
+| **Planning Days** | `CUETUBE_PLANNING_DAYS` | `planning_days` | `--days` | `7` | Days ahead to search for calendar openings |
+| **Calendar IDs** | `CUETUBE_CALENDAR_IDS` | `calendar_ids` | `--calendars` | `("primary",)` | Google Calendar IDs to check for conflicts |
+| **Target Calendar** | `CUETUBE_TARGET_CALENDAR` | `target_calendar` | `--target-calendar` | `"CueTube"` | Destination calendar (auto-created if missing) |
+| **All Calendars** | `CUETUBE_ALL_CALENDARS` | `include_all_accessible_calendars` | `--all-calendars` | `False` | Query all visible secondary/shared calendars |
+| **Takeout Path** | `CUETUBE_TAKEOUT_PATH` | `takeout_path` | `--takeout` | `None` | Path to Google Takeout CSV/ZIP archive |
+| **Concurrency** | `CUETUBE_CONCURRENCY` | `concurrency` | `--concurrency` | `4` | Worker threads for transcripts and LLM triage |
+| **Schedule Config** | `CUETUBE_*` (circadian) | `schedule_config` | N/A | `CircadianScheduleConfig()` | Circadian windows, energy colors & blackouts |
+| **Load Env Fallback** | N/A | `load_env` | N/A | `True` | Fall back to `.env`/host environment if param unset |
+
+> For the exhaustive configuration guide including circadian window hours, energy colors, event title prefixes, and blackout formatting, see [Configuration Guide](file:///Users/yash/Documents/Repos/cuetube/docs/CONFIGURATION.md).
 
 ## Product Roadmap & Vision
 
@@ -74,6 +140,7 @@ CueTube follows a two-phased delivery strategy:
    - Interactive queue selection, energy-schedule dashboards, and real-time viewing notifications.
 
 ## Documentation Index
+- [Configuration Guide](file:///Users/yash/Documents/Repos/cuetube/docs/CONFIGURATION.md): Complete configuration reference, parameter mapping, and circadian rules.
 - [Developer Guide](file:///Users/yash/Documents/Repos/cuetube/docs/DEVELOPMENT.md): Detailed environment setup, execution examples, and developer guidelines.
 - [Architecture](file:///Users/yash/Documents/Repos/cuetube/docs/ARCHITECTURE.md): System decomposition, deep modules, seams, and adapters.
 - [Modules Specification](file:///Users/yash/Documents/Repos/cuetube/docs/MODULES.md): Module interfaces, responsibilities, and seam contracts.

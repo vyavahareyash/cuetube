@@ -385,6 +385,49 @@ class TestPipelineRunnerHighestSeam(unittest.TestCase):
         self.assertEqual(summary.total_classified, 2)
         self.assertEqual(summary.total_scheduled, 2)
 
+    def test_pipeline_config_create_with_direct_params_no_env(self) -> None:
+        """PipelineConfig.create initializes properly via direct parameters without ENV."""
+        cfg = PipelineConfig.create(
+            openrouter_api_key="sk-test-key-12345",
+            google_client_id="test-client-id",
+            google_client_secret="test-client-secret",
+            google_refresh_token="test-refresh-token",
+            inbox_playlist_name="Custom-Inbox",
+            target_calendar="Custom-Calendar",
+            buffer_minutes=25,
+            planning_days=10,
+            concurrency=2,
+            load_env=False,
+        )
+        self.assertEqual(cfg.inbox_playlist_name, "Custom-Inbox")
+        self.assertEqual(cfg.buffer_minutes, 25)
+        self.assertEqual(cfg.concurrency, 2)
+        self.assertEqual(cfg.classifier.config.api_key, "sk-test-key-12345")
+        self.assertEqual(cfg.calendar_target.target_calendar, "Custom-Calendar")
+
+    def test_pipeline_config_create_with_oauth_credentials_object(self) -> None:
+        """PipelineConfig.create accepts OAuthCredentials instance directly."""
+        from cuetube.adapters.youtube import OAuthCredentials
+
+        creds = OAuthCredentials(
+            client_id="cid",
+            client_secret="csec",
+            refresh_token="cref",
+        )
+        cfg = PipelineConfig.create(
+            openrouter_api_key="sk-test-key",
+            google_credentials=creds,
+            load_env=False,
+        )
+        self.assertEqual(cfg.ingestion_source.credentials.client_id, "cid")
+        self.assertEqual(cfg.calendar_target.credentials.client_secret, "csec")
+
+    def test_pipeline_config_create_missing_credentials_raises(self) -> None:
+        """PipelineConfig.create raises ValueError when credentials missing and load_env=False."""
+        with self.assertRaises(ValueError) as ctx:
+            PipelineConfig.create(load_env=False)
+        self.assertIn("Missing Google/YouTube credentials", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,7 +8,43 @@ version = "0.1.0"
 description = "Autonomous YouTube backlog triage and calendar scheduling pipeline"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "Yash Vyavahare", email = "94339743+vyavahareyash@users.noreply.github.com" },
+]
+keywords = [
+    "youtube",
+    "calendar",
+    "scheduling",
+    "triage",
+    "chronobiology",
+    "pipeline",
+    "productivity",
+    "google-calendar",
+    "openrouter",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Office/Business :: Scheduling",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/vyavahareyash/cuetube"
+Repository = "https://github.com/vyavahareyash/cuetube"
+Issues = "https://github.com/vyavahareyash/cuetube/issues"
+Documentation = "https://github.com/vyavahareyash/cuetube#readme"
 
 [project.optional-dependencies]
 dev = [
@@ -21,6 +57,9 @@ cuetube = "cuetube.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+cuetube = ["py.typed"]
 
 [tool.ruff]
 line-length = 100
@@ -42,7 +81,6 @@ ignore = []
 known-first-party = ["cuetube"]
 combine-as-imports = true
 
-
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
@@ -51,6 +89,3 @@ indent-style = "space"
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-p no:deepeval"
-
-
-

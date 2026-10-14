@@ -140,6 +140,25 @@ summary = run_pipeline(config)
 print(summary)
 ```
 
+### Parameter-Based Initialization (No .env)
+For programmatic usage without relying on `.env` files:
+```python
+from cuetube import PipelineConfig, run_pipeline
+
+cfg = PipelineConfig.create(
+    openrouter_api_key="sk-or-...",
+    google_client_id="...",
+    google_client_secret="...",
+    google_refresh_token="...",
+    target_calendar="CueTube",
+    buffer_minutes=15,
+    load_env=False,
+)
+summary = run_pipeline(cfg, dry_run=True)
+```
+
+> See [CONFIGURATION.md](file:///Users/yash/Documents/Repos/cuetube/docs/CONFIGURATION.md) for the exhaustive list of configuration parameters, types, defaults, and circadian options.
+
 ---
 
 ## 6. Architecture & Code Guidelines
